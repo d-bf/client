@@ -33,3 +33,5 @@
 
 .project
 .cproject
+/Debug/
+/Release/
