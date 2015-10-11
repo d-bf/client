@@ -31,7 +31,11 @@
 # Debug files
 *.dSYM/
 
+# Eclispe files
 .project
 .cproject
 /Debug/
 /Release/
+
+# Log files
+*.log
