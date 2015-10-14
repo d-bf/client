@@ -3,5 +3,6 @@
 		"url_api" : "",
 		"version" : "",
 		"ssl_verify" : 0
-	}
+	},
+	"platform" : []
 }

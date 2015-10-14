@@ -6,7 +6,6 @@
 
 #include "./lib/cJSON/cJSON.h"
 
-
 /* Constants */
 
 #define URI_GET_TASK "task"
@@ -19,25 +18,23 @@
 
 static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log";
 
-
 /* Global variables */
 
 char currentPath[PATH_MAX + 1], *urlApiVer, *bufferStr;
 int sslVerify;
-cJSON *bufferJson;
 
 
 /* Functions forward declaration */
 
-cJSON *getJsonObject(cJSON *object, const char *option);
-cJSON *getJsonFile(void);
 void setCurrentPath(void);
-void checkConfigs(void);
+cJSON *getJsonObject(cJSON *object, const char *option, int exit);
+cJSON *getJsonFile(void);
+void initPlatforms(void);
+void chkConfigs(void);
 void setUrlApiVer(void);
 const char *getReqUri(int req);
 int sendRequest(int reqType, const char *data);
 size_t processResponse(char *ptr, size_t size, size_t nmemb, int *reqType);
-
 
 /* Main function entry point */
 
@@ -45,6 +42,7 @@ int main(int argc, char **argv)
 {
     /* Initialization */
     setCurrentPath();
+    chkConfigs();
     setUrlApiVer();
 
     // Global libcurl initialization
@@ -60,18 +58,29 @@ int main(int argc, char **argv)
     return 0;
 }
 
-
 /* Functions definition */
 
-cJSON *getJsonObject(cJSON *object, const char *option)
+void setCurrentPath()
+{
+    // Linux
+    readlink("/proc/self/exe", currentPath, PATH_MAX);
+    dirname(currentPath);
+    strcat(currentPath, "/");
+}
+
+cJSON *getJsonObject(cJSON *object, const char *option, int halt)
 {
     cJSON *jsonBuf;
 
     jsonBuf = cJSON_GetObjectItem(object, option);
 
     if (!jsonBuf) {
-        fprintf(stderr, "'%s' %s", option, "not found in config file!");
-        exit(1);
+        if (halt) {
+            fprintf(stderr, "'%s' %s", option, "not found in config file!");
+            exit(1);
+        } else {
+            return 0;
+        }
     } else {
         return jsonBuf;
     }
@@ -82,7 +91,7 @@ cJSON *getJsonFile()
     FILE *configFile;
 
     bufferStr = (char*) malloc(PATH_MAX + 1);
-    strncpy(bufferStr, currentPath, PATH_MAX);
+    strcpy(bufferStr, currentPath);
     strcat(bufferStr, CONFIG_FILE);
     configFile = fopen(bufferStr, "rb");
     free(bufferStr);
@@ -112,17 +121,71 @@ cJSON *getJsonFile()
     return jsonBuf;
 }
 
-void setCurrentPath()
+void initPlatforms()
 {
-    // Linux
-    readlink("/proc/self/exe", currentPath, PATH_MAX);
-    dirname(currentPath);
-    strcat(currentPath, "/");
+    char platform[20];
+
+    // Check OS
+#if defined(_WIN32) || defined(_WIN64)
+    strcpy(platform, "win");
+#elif defined(__linux__)
+    strcpy(platform, "linux");
+#elif defined(__APPLE__)
+    strcpy(platform, "mac");
+#endif
+
+    // Check system type 32 or 64
+    if (sizeof(void *) == 8)
+        strcat(platform, "_64");
+    else
+        strcat(platform, "_32");
+
+    // Add CPU
+    strcat(platform, "_cpu");
+
+    cJSON *jsonArr, *jsonObj;
+    jsonArr = cJSON_CreateArray();
+    //TODO: Add all platforms in loop
+    jsonObj = cJSON_CreateObject();
+    cJSON_AddItemToObject(jsonObj, "id", cJSON_CreateString(platform));
+    cJSON_AddItemToArray(jsonArr, jsonObj);
+
+    cJSON *jsonBuf;
+    jsonBuf = getJsonFile();
+    jsonBuf = getJsonObject(jsonBuf, "platform", 0);
+    if (jsonBuf) { // platform option exists in config file.
+        jsonBuf = getJsonFile();
+        cJSON_ReplaceItemInObject(jsonBuf, "platform", jsonArr);
+    } else { // platform option does not exist in config file, so create it.
+        jsonBuf = getJsonFile();
+        cJSON_AddItemToObject(jsonBuf, "platform", jsonArr);
+    }
+
+    // Save new config file
+    FILE *configFile;
+    bufferStr = (char*) malloc(PATH_MAX + 1);
+    strcpy(bufferStr, currentPath);
+    strcat(bufferStr, CONFIG_FILE);
+    configFile = fopen(bufferStr, "wb");
+    free(bufferStr);
+    if (!configFile) {
+        fprintf(stderr, "%s", "Config file not found!");
+        exit(1);
+    }
+    bufferStr = cJSON_Print(jsonBuf);
+    fputs(bufferStr, configFile);
+    fclose(configFile);
+
+    free(bufferStr);
+    cJSON_Delete(jsonBuf);
+    jsonObj = NULL;
+    jsonArr = NULL;
+    jsonBuf = NULL;
 }
 
-void checkConfigs(void)
+void chkConfigs(void)
 {
-
+    initPlatforms();
 }
 
 void setUrlApiVer()
@@ -132,23 +195,21 @@ void setUrlApiVer()
     size_t strSize;
 
     jsonBuf = getJsonFile();
-    jsonBuf = getJsonObject(jsonBuf, "server");
+    jsonBuf = getJsonObject(jsonBuf, "server", 1);
 
-    strcpy(strBuf, getJsonObject(jsonBuf, "url_api")->valuestring);
+    strcpy(strBuf, getJsonObject(jsonBuf, "url_api", 1)->valuestring);
     strSize = strlen(strBuf) + 3;
     urlApiVer = (char*) malloc(strSize);
-    strncpy(urlApiVer, strBuf, strlen(strBuf));
-    strncat(urlApiVer, "/", 1);
 
-    strcpy(strBuf, getJsonObject(jsonBuf, "version")->valuestring);
+    strcpy(urlApiVer, strBuf);
+    strcat(urlApiVer, "/");
+    strcpy(strBuf, getJsonObject(jsonBuf, "version", 1)->valuestring);
     strSize += strlen(strBuf);
     urlApiVer = (char*) realloc(urlApiVer, strSize);
-    strncat(urlApiVer, strBuf, strlen(strBuf));
-    strncat(urlApiVer, "/", 1);
+    strcat(urlApiVer, strBuf);
+    strcat(urlApiVer, "/");
 
-    urlApiVer[strSize] = '\0';
-
-    sslVerify = getJsonObject(jsonBuf, "ssl_verify")->valueint;
+    sslVerify = getJsonObject(jsonBuf, "ssl_verify", 1)->valueint;
 
     cJSON_Delete(jsonBuf);
 }
@@ -178,9 +239,10 @@ int sendRequest(int reqType, const char *data)
 
         // Set request URL
         char *urlStr;
-        urlStr = (char*) malloc(strlen(urlApiVer) + strlen(getReqUri(reqType)) + 1);
-        strncpy(urlStr, urlApiVer, strlen(urlApiVer));
-        strncat(urlStr, getReqUri(reqType), strlen(getReqUri(reqType)) + 1);
+        urlStr = (char*) malloc(
+            strlen(urlApiVer) + strlen(getReqUri(reqType)) + 1);
+        strcpy(urlStr, urlApiVer);
+        strcat(urlStr, getReqUri(reqType));
         curl_easy_setopt(curl, CURLOPT_URL, urlStr);
         free(urlStr);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, sslVerify);
