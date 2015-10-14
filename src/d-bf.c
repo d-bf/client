@@ -2,39 +2,62 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "curl/curl.h"
 
 #include "./lib/cJSON/cJSON.h"
 
 /* Constants */
-
-#define URI_GET_TASK "task"
-#define URI_GET_CRACK_INFO "crack"
-#define URI_SEND_RESULT "task"
+#define OS_LINUX 1
+#define OS_WIN 2
+#define OS_MAC 3
+#define ARCH_32 1
+#define ARCH_64 2
+#define OS_NAME_LINUX "linux"
+#define OS_NAME_WIN "win"
+#define OS_NAME_MAC "mac"
+#define ARCH_NAME_32 "32"
+#define ARCH_NAME_64 "64"
 
 #define REQ_GET_TASK 1
 #define REQ_GET_CRACK_INFO 2
 #define REQ_SEND_RESULT 3
+#define URI_GET_TASK "task"
+#define URI_GET_CRACK_INFO "crack"
+#define URI_SEND_RESULT "task"
 
 static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log";
 
 /* Global variables */
 
-char currentPath[PATH_MAX + 1], *urlApiVer, *bufferStr;
-int sslVerify;
-
+char currentPath[PATH_MAX + 1], *urlApiVer;
+int os, arch, sslVerify;
 
 /* Functions forward declaration */
 
 void setCurrentPath(void);
 cJSON *getJsonObject(cJSON *object, const char *option, int exit);
 cJSON *getJsonFile(void);
-void initPlatforms(void);
+void setPlatform(void);
+int getNumOfCpu();
 void chkConfigs(void);
+cJSON *getPlatform(void);
 void setUrlApiVer(void);
 const char *getReqUri(int req);
-int sendRequest(int reqType, const char *data);
+int sendRequest(int reqType, cJSON *data);
 size_t processResponse(char *ptr, size_t size, size_t nmemb, int *reqType);
+void reqGetTask(void);
+void resGetTask(char *response);
+void reqSendResult(void);
+void resSendResult(char *response);
+void reqGetCrackInfo(void);
+void resGetCrackInfo(char *response);
 
 /* Main function entry point */
 
@@ -88,13 +111,14 @@ cJSON *getJsonObject(cJSON *object, const char *option, int halt)
 
 cJSON *getJsonFile()
 {
+    char *strBuf;
     FILE *configFile;
 
-    bufferStr = (char*) malloc(PATH_MAX + 1);
-    strcpy(bufferStr, currentPath);
-    strcat(bufferStr, CONFIG_FILE);
-    configFile = fopen(bufferStr, "rb");
-    free(bufferStr);
+    strBuf = (char*) malloc(PATH_MAX + 1);
+    strcpy(strBuf, currentPath);
+    strcat(strBuf, CONFIG_FILE);
+    configFile = fopen(strBuf, "rb");
+    free(strBuf);
     if (!configFile) {
         fprintf(stderr, "%s", "Config file not found!");
         exit(1);
@@ -105,13 +129,13 @@ cJSON *getJsonFile()
     fseek(configFile, 0, SEEK_END);
     configLen = ftell(configFile);
     fseek(configFile, 0, SEEK_SET);
-    bufferStr = (char*) malloc(configLen + 1);
-    fread(bufferStr, 1, configLen, configFile);
+    strBuf = (char*) malloc(configLen + 1);
+    fread(strBuf, 1, configLen, configFile);
     fclose(configFile);
 
     cJSON *jsonBuf;
-    jsonBuf = cJSON_Parse(bufferStr);
-    free(bufferStr);
+    jsonBuf = cJSON_Parse(strBuf);
+    free(strBuf);
 
     if (!jsonBuf) {
         fprintf(stderr, "%s", "Invalid JSON config file!");
@@ -121,26 +145,35 @@ cJSON *getJsonFile()
     return jsonBuf;
 }
 
-void initPlatforms()
+void setPlatform()
 {
-    char platform[20];
+    char platform[20], osName[6], archName[3];
 
     // Check OS
 #if defined(_WIN32) || defined(_WIN64)
-    strcpy(platform, "win");
+    os = OS_WIN;
+    strcpy(osName, OS_NAME_WIN);
 #elif defined(__linux__)
-    strcpy(platform, "linux");
+    os = OS_LINUX;
+    strcpy(osName, OS_NAME_LINUX);
 #elif defined(__APPLE__)
-    strcpy(platform, "mac");
+    os = OS_MAC;
+    strcpy(osName, OS_NAME_MAC);
 #endif
 
     // Check system type 32 or 64
-    if (sizeof(void *) == 8)
-        strcat(platform, "_64");
-    else
-        strcat(platform, "_32");
+    if (sizeof(void *) == 8) {
+        arch = ARCH_64;
+        strcat(archName, ARCH_NAME_64);
+    } else {
+        arch = ARCH_32;
+        strcat(archName, ARCH_NAME_32);
+    }
 
     // Add CPU
+    strcpy(platform, osName);
+    strcat(platform, "_");
+    strcat(platform, archName);
     strcat(platform, "_cpu");
 
     cJSON *jsonArr, *jsonObj;
@@ -162,30 +195,61 @@ void initPlatforms()
     }
 
     // Save new config file
+    char *strBuf;
     FILE *configFile;
-    bufferStr = (char*) malloc(PATH_MAX + 1);
-    strcpy(bufferStr, currentPath);
-    strcat(bufferStr, CONFIG_FILE);
-    configFile = fopen(bufferStr, "wb");
-    free(bufferStr);
+    strBuf = (char*) malloc(PATH_MAX + 1);
+    strcpy(strBuf, currentPath);
+    strcat(strBuf, CONFIG_FILE);
+    configFile = fopen(strBuf, "wb");
+    free(strBuf);
     if (!configFile) {
         fprintf(stderr, "%s", "Config file not found!");
         exit(1);
     }
-    bufferStr = cJSON_Print(jsonBuf);
-    fputs(bufferStr, configFile);
+    strBuf = cJSON_Print(jsonBuf);
+    fputs(strBuf, configFile);
     fclose(configFile);
 
-    free(bufferStr);
+    free(strBuf);
     cJSON_Delete(jsonBuf);
     jsonObj = NULL;
     jsonArr = NULL;
     jsonBuf = NULL;
 }
 
+int getNumOfCpu(void)
+{
+    int pu = 0;
+#if defined(_WIN32) || defined(_WIN64)
+#ifndef _SC_NPROCESSORS_ONLN
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+#define sysconf(a) info.dwNumberOfProcessors
+#define _SC_NPROCESSORS_ONLN
+#endif
+#endif
+#ifdef _SC_NPROCESSORS_ONLN
+    pu = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
+
+    if (pu > 0)
+        return pu;
+    else
+        return 0;
+}
+
 void chkConfigs(void)
 {
-    initPlatforms();
+    setPlatform();
+}
+
+cJSON *getPlatform()
+{
+    cJSON *jsonBuf;
+
+    jsonBuf = getJsonFile();
+    jsonBuf = getJsonObject(jsonBuf, "platform", 1);
+    return jsonBuf;
 }
 
 void setUrlApiVer()
@@ -224,7 +288,7 @@ const char *getReqUri(int req)
         return URI_SEND_RESULT;
 }
 
-int sendRequest(int reqType, const char *data)
+int sendRequest(int reqType, cJSON *data)
 {
     CURL *curl;
 
@@ -244,24 +308,32 @@ int sendRequest(int reqType, const char *data)
         strcpy(urlStr, urlApiVer);
         strcat(urlStr, getReqUri(reqType));
         curl_easy_setopt(curl, CURLOPT_URL, urlStr);
-        free(urlStr);
+
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, sslVerify);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, sslVerify);
 
         // Set post data
-        cJSON *jsonBuf = cJSON_Parse(data);
-        if (jsonBuf) // If the input json string is valid
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-        else
+        char *strBuf;
+        if (data) { // If the input json is valid
+            strBuf = cJSON_PrintUnformatted(data);
+            if (strBuf)
+                curl_easy_setopt(curl, CURLOPT_POSTFIELDS, strBuf);
+            else
+                curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{}");
+        } else {
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{}");
-        cJSON_Delete(jsonBuf);
+        }
 
         // Set callback for writing received data
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, reqType);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &reqType);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, processResponse);
 
         CURLcode resCode = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
+
+        free(urlStr);
+        if (data)
+            free(strBuf);
 
         return resCode;
     } else {
@@ -271,11 +343,61 @@ int sendRequest(int reqType, const char *data)
 
 size_t processResponse(char *ptr, size_t size, size_t nmemb, int *reqType)
 {
-    cJSON *jsonBuf;
-
-    jsonBuf = cJSON_Parse(ptr);
-    printf("response: %s", cJSON_PrintUnformatted(jsonBuf));
-    cJSON_Delete(jsonBuf);
+    switch (*reqType) {
+        case REQ_GET_TASK:
+            resGetTask(ptr);
+            break;
+        case REQ_SEND_RESULT:
+            resSendResult(ptr);
+            break;
+        case REQ_GET_CRACK_INFO:
+            resGetCrackInfo(ptr);
+            break;
+    }
 
     return size * nmemb;
+}
+
+void reqGetTask(void)
+{
+    cJSON *jsonClientIfno = cJSON_CreateObject(), *jsonPlatform =
+        cJSON_CreateObject();
+
+    cJSON_AddItemToObject(jsonPlatform, "platform", getPlatform());
+    cJSON_AddItemReferenceToObject(jsonClientIfno, "client_info", jsonPlatform);
+    cJSON_PrintUnformatted(jsonClientIfno);
+
+    sendRequest(REQ_GET_TASK, jsonClientIfno);
+    cJSON_Delete(jsonClientIfno);
+}
+
+void resGetTask(char *response)
+{
+    cJSON *jsonBuf = cJSON_Parse(response);
+    printf("response: %s", cJSON_PrintUnformatted(jsonBuf));
+    cJSON_Delete(jsonBuf);
+}
+
+void reqSendResult(void)
+{
+
+}
+
+void resSendResult(char *response)
+{
+    cJSON *jsonBuf = cJSON_Parse(response);
+
+    cJSON_Delete(jsonBuf);
+}
+
+void reqGetCrackInfo(void)
+{
+
+}
+
+void resGetCrackInfo(char *response)
+{
+    cJSON *jsonBuf = cJSON_Parse(response);
+
+    cJSON_Delete(jsonBuf);
 }
