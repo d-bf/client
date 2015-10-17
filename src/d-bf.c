@@ -45,7 +45,7 @@ void setCurrentPath(void);
 cJSON *getJsonObject(cJSON *object, const char *option, int exit);
 cJSON *getJsonFile(void);
 void setPlatform(void);
-int getNumOfCpu();
+int getNumOfCpu(void);
 void chkConfigs(void);
 cJSON *getPlatform(void);
 void setUrlApiVer(void);
@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 
 /* Functions definition */
 
-void setCurrentPath()
+void setCurrentPath(void)
 {
     // Linux
     readlink("/proc/self/exe", currentPath, PATH_MAX);
@@ -109,7 +109,7 @@ cJSON *getJsonObject(cJSON *object, const char *option, int halt)
     }
 }
 
-cJSON *getJsonFile()
+cJSON *getJsonFile(void)
 {
     char *strBuf;
     FILE *configFile;
@@ -145,7 +145,7 @@ cJSON *getJsonFile()
     return jsonBuf;
 }
 
-void setPlatform()
+void setPlatform(void)
 {
     char platform[20], osName[6], archName[3];
 
@@ -235,7 +235,7 @@ int getNumOfCpu(void)
     if (pu > 0)
         return pu;
     else
-        return 0;
+        return 1;
 }
 
 void chkConfigs(void)
@@ -243,7 +243,7 @@ void chkConfigs(void)
     setPlatform();
 }
 
-cJSON *getPlatform()
+cJSON *getPlatform(void)
 {
     cJSON *jsonBuf;
 
@@ -252,11 +252,11 @@ cJSON *getPlatform()
     return jsonBuf;
 }
 
-void setUrlApiVer()
+void setUrlApiVer(void)
 {
     cJSON *jsonBuf;
     char strBuf[1025];
-    size_t strSize;
+    unsigned int strSize;
 
     jsonBuf = getJsonFile();
     jsonBuf = getJsonObject(jsonBuf, "server", 1);
