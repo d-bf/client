@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -47,6 +48,7 @@ cJSON *getJsonFile(void);
 void setPlatform(void);
 int getNumOfCpu(void);
 void chkConfigs(void);
+unsigned long long int benchmark(void);
 cJSON *getPlatform(void);
 void setUrlApiVer(void);
 const char *getReqUri(int req);
@@ -241,6 +243,46 @@ int getNumOfCpu(void)
 void chkConfigs(void)
 {
     setPlatform();
+}
+
+unsigned long long int benchmark(void)
+{
+#ifdef CLOCK_PROCESS_CPUTIME_ID
+    /* cpu time in the current process */
+#define CLOCKTYPE  CLOCK_PROCESS_CPUTIME_ID
+#else
+    /* this one should be appropriate to avoid errors on multiprocessors systems */
+#define CLOCKTYPE  CLOCK_MONOTONIC
+#endif
+
+    struct timespec ts, te;
+    int i, cores = getNumOfCpu();
+    long elaps_ns;
+    double elapse;
+    unsigned long long int hashes, benchmark = 0;
+    char *b64Enc, b64Input[2] = "X";
+
+    for (i = 0; i < cores; i++) {
+        clock_gettime(CLOCKTYPE, &ts);
+        hashes = 1;
+        while (1) {
+            b64Enc = (char*) malloc(Base64encode_len(strlen(b64Input)) + 1);
+            Base64encode(b64Enc, b64Input, strlen(b64Input));
+            free(b64Enc);
+
+            clock_gettime(CLOCKTYPE, &te);
+            elapse = difftime(te.tv_sec, ts.tv_sec);
+            if (elapse > 0)
+                break;
+            hashes++;
+        }
+
+        elaps_ns = te.tv_nsec - ts.tv_nsec;
+        elapse += ((double) elaps_ns) / 1.0e9;
+        benchmark += (unsigned long long int) (hashes / elapse) + 0.5;
+    }
+
+    return benchmark;
 }
 
 cJSON *getPlatform(void)
