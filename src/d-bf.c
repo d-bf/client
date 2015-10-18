@@ -3,26 +3,45 @@
 #include <string.h>
 #include <time.h>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 #include "curl/curl.h"
 
 #include "./lib/cJSON/cJSON.h"
 
+/* Determine OS */
+#if defined(_WIN32) || defined(_WIN64)
+#define OS_WIN
+#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__linux__)
+#define OS_LINUX
+#elif defined(__APPLE__) || defined(__MACH__)
+#define OS_MAC
+#endif
+
+/* Perform OS specific tasks */
+#if defined(OS_WIN)
+/* It is windows */
+#include <windows.h>
+#define WIN32_LEAN_AND_MEAN
+#define PATH_SEPARATOR "\\"
+#define OS_NAME "win"
+
+#else
+/* It is not windows */
+#include <unistd.h>
+#define PATH_SEPARATOR "/"
+
+#endif
+
+#if defined(OS_LINUX)
+/* It is linux */
+#define OS_NAME "linux"
+
+#elif defined(OS_MAC)
+/* It is mac */
+#define OS_NAME "mac"
+
+#endif
+
 /* Constants */
-#define OS_LINUX 1
-#define OS_WIN 2
-#define OS_MAC 3
-#define ARCH_32 1
-#define ARCH_64 2
-#define OS_NAME_LINUX "linux"
-#define OS_NAME_WIN "win"
-#define OS_NAME_MAC "mac"
 #define ARCH_NAME_32 "32"
 #define ARCH_NAME_64 "64"
 
@@ -37,8 +56,8 @@ static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log";
 
 /* Global variables */
 
-char currentPath[PATH_MAX + 1], *urlApiVer;
-int os, arch, sslVerify;
+char archName[3], currentPath[PATH_MAX + 1], *urlApiVer;
+int sslVerify;
 
 /* Functions forward declaration */
 
@@ -149,31 +168,17 @@ cJSON *getJsonFile(void)
 
 void setPlatform(void)
 {
-    char platform[20], osName[6], archName[3];
-
-    // Check OS
-#if defined(_WIN32) || defined(_WIN64)
-    os = OS_WIN;
-    strcpy(osName, OS_NAME_WIN);
-#elif defined(__linux__)
-    os = OS_LINUX;
-    strcpy(osName, OS_NAME_LINUX);
-#elif defined(__APPLE__)
-    os = OS_MAC;
-    strcpy(osName, OS_NAME_MAC);
-#endif
+    char platform[20];
 
     // Check system type 32 or 64
     if (sizeof(void *) == 8) {
-        arch = ARCH_64;
         strcat(archName, ARCH_NAME_64);
     } else {
-        arch = ARCH_32;
         strcat(archName, ARCH_NAME_32);
     }
 
     // Add CPU
-    strcpy(platform, osName);
+    strcpy(platform, OS_NAME);
     strcat(platform, "_");
     strcat(platform, archName);
     strcat(platform, "_cpu");
