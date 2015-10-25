@@ -59,7 +59,8 @@
 #define REQ_SEND_RESULT 5
 #define URI_SEND_RESULT "task/result"
 
-static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log", RESPONSE_FILE[] = "response.tmp";
+static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log",
+    RES_BODY_FILE[] = "res-body.tmp", RES_HEADER_FILE[] = "res-header.tmp";
 
 /* Global variables */
 
@@ -68,7 +69,7 @@ int sslVerify;
 
 /* Functions forward declaration */
 
-int fileExist (const char *filePath);
+int fileExist(const char *filePath);
 void setCurrentPath(void);
 cJSON *getJsonObject(cJSON *object, const char *option, int exit);
 cJSON *getJsonFile(void);
@@ -79,18 +80,18 @@ unsigned long long int benchmark(void);
 cJSON *getPlatform(void);
 void setUrlApiVer(void);
 const char *getReqUri(int req);
-size_t writeResponse(void *ptr, size_t size, size_t nmemb, FILE *stream);
+size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream);
 int sendRequest(int reqType, cJSON *data);
 void reqGetVendor(cJSON *vendorData);
-void resGetVendor(const char *responseFilePath);
+void resGetVendor(char *resBody, const char *resHeaderFilePath);
 void reqUpdateVendor(void);
-void resUpdateVendor(const char *responseFilePath);
+void resUpdateVendor(char *resBody);
 void reqGetTask(void);
-void resGetTask(const char *responseFilePath);
+void resGetTask(char *resBody);
 void reqSendResult(void);
-void resSendResult(const char *responseFilePath);
+void resSendResult(char *resBody);
 void reqGetCrackInfo(void);
-void resGetCrackInfo(const char *responseFilePath);
+void resGetCrackInfo(char *resBody);
 
 /* Main function entry point */
 
@@ -116,7 +117,7 @@ int main(int argc, char **argv)
 
 /* Functions definition */
 
-int fileExist (const char *filePath)
+int fileExist(const char *filePath)
 {
     struct stat st;
     return (stat(filePath, &st) == 0);
@@ -153,7 +154,7 @@ cJSON *getJsonFile(void)
     char *strBuf;
     FILE *configFile;
 
-    strBuf = (char*) malloc(PATH_MAX + 1);
+    strBuf = (char *) malloc(PATH_MAX + 1);
     strcpy(strBuf, currentPath);
     strcat(strBuf, CONFIG_FILE);
     configFile = fopen(strBuf, "rb");
@@ -168,7 +169,7 @@ cJSON *getJsonFile(void)
     fseek(configFile, 0, SEEK_END);
     configLen = ftell(configFile);
     fseek(configFile, 0, SEEK_SET);
-    strBuf = (char*) malloc(configLen + 1);
+    strBuf = (char *) malloc(configLen + 1);
     fread(strBuf, 1, configLen, configFile);
     fclose(configFile);
 
@@ -221,12 +222,15 @@ void setPlatform(void)
     strcat(filePath, platformBase);
     strcat(filePath, "_cpu");
 
-    if (! fileExist(filePath)) {
+    if (!fileExist(filePath)) {
         getVendor = 1;
         vendorFile = cJSON_CreateObject();
-        cJSON_AddItemToObject(vendorFile, "type", cJSON_CreateString("cracker"));
-        cJSON_AddItemToObject(vendorFile, "name", cJSON_CreateString("hashcat_cpu"));
-        cJSON_AddItemToObject(vendorFile, "platform_id", cJSON_CreateString(platformId));
+        cJSON_AddItemToObject(vendorFile, "type",
+            cJSON_CreateString("cracker"));
+        cJSON_AddItemToObject(vendorFile, "name",
+            cJSON_CreateString("hashcat_cpu"));
+        cJSON_AddItemToObject(vendorFile, "platform_id",
+            cJSON_CreateString(platformId));
     }
 
     if (getVendor)
@@ -248,7 +252,7 @@ void setPlatform(void)
     // Save new config file
     char *strBuf;
     FILE *configFile;
-    strBuf = (char*) malloc(PATH_MAX + 1);
+    strBuf = (char *) malloc(PATH_MAX + 1);
     strcpy(strBuf, currentPath);
     strcat(strBuf, CONFIG_FILE);
     configFile = fopen(strBuf, "wb");
@@ -315,7 +319,7 @@ unsigned long long int benchmark(void)
         clock_gettime(CLOCKTYPE, &ts);
         hashes = 1;
         while (1) {
-            b64Enc = (char*) malloc(Base64encode_len(strlen(b64Input)) + 1);
+            b64Enc = (char *) malloc(Base64encode_len(strlen(b64Input)) + 1);
             Base64encode(b64Enc, b64Input, strlen(b64Input));
             free(b64Enc);
 
@@ -356,7 +360,7 @@ void setUrlApiVer(void)
     strcat(strBuf, getJsonObject(jsonBuf, "version", 1)->valuestring);
     strcat(strBuf, "/");
 
-    urlApiVer = (char*) malloc(strlen(strBuf) + 1);
+    urlApiVer = (char *) malloc(strlen(strBuf) + 1);
     strcpy(urlApiVer, strBuf);
 
     sslVerify = getJsonObject(jsonBuf, "ssl_verify", 1)->valueint;
@@ -380,9 +384,9 @@ const char *getReqUri(int req)
     return "";
 }
 
-size_t writeResponse(void *ptr, size_t size, size_t nmemb, FILE *stream)
+size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream)
 {
-    size_t written = fwrite(ptr, size, nmemb, stream);
+    size_t written = fwrite(ptr, size, nmemb, (FILE *) stream);
     return written;
 }
 
@@ -422,42 +426,83 @@ int sendRequest(int reqType, cJSON *data)
         }
 
         // Set callback for writing received data
-        FILE *responseFile;
-        char responseFilePath[PATH_MAX + 1];
-        strcpy(responseFilePath, currentPath);
-        strcat(responseFilePath, RESPONSE_FILE);
-        responseFile = fopen(responseFilePath, "wb");
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeResponse);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, responseFile);
+        FILE *resHeaderFile, *resBodyFile;
+        char resHeaderFilePath[PATH_MAX + 1], resBodyFilePath[PATH_MAX + 1];
+
+        strcpy(resHeaderFilePath, currentPath);
+        strcat(resHeaderFilePath, RES_HEADER_FILE);
+        resHeaderFile = fopen(resHeaderFilePath, "wb");
+        if (!resHeaderFile) {
+            curl_easy_cleanup(curl);
+
+            fprintf(stderr, "%s", "Can't write response header file!");
+            return -1;
+        }
+
+        strcpy(resBodyFilePath, currentPath);
+        strcat(resBodyFilePath, RES_BODY_FILE);
+        resBodyFile = fopen(resBodyFilePath, "wb");
+        if (!resBodyFile) {
+            curl_easy_cleanup(curl);
+            fclose(resHeaderFile);
+
+            fprintf(stderr, "%s", "Can't write response body file!");
+            return -1;
+        }
+
+        curl_easy_setopt(curl, CURLOPT_HEADERDATA, resHeaderFile);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, resBodyFile);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFunction);
 
         CURLcode resCode = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
+        fclose(resHeaderFile);
+        fclose(resBodyFile);
 
         if (data)
             free(strBuf);
 
         if (resCode == CURLE_OK) { // Request completed successfully, so process the response
+            // Read response file
+            resBodyFile = fopen(resBodyFilePath, "rb");
+            if (!resBodyFile) {
+                fprintf(stderr, "%s", "Can't read response body file!");
+                return -1;
+            }
+
+            long resLen;
+
+            fseek(resBodyFile, 0, SEEK_END);
+            resLen = ftell(resBodyFile);
+            fseek(resBodyFile, 0, SEEK_SET);
+            strBuf = (char *) malloc(resLen + 1);
+            fread(strBuf, 1, resLen, resBodyFile);
+            fclose(resBodyFile);
+
             switch (reqType) {
                 case REQ_GET_VENDOR:
-                    resGetVendor(responseFilePath);
+                    resGetVendor(strBuf, resHeaderFilePath);
                     break;
                 case REQ_UPDATE_VENDOR:
-                    resUpdateVendor(responseFilePath);
+                    resUpdateVendor(strBuf);
                     break;
                 case REQ_GET_TASK:
-                    resGetTask(responseFilePath);
+                    resGetTask(strBuf);
                     break;
                 case REQ_SEND_RESULT:
-                    resSendResult(responseFilePath);
+                    resSendResult(strBuf);
                     break;
                 case REQ_GET_CRACK_INFO:
-                    resGetCrackInfo(responseFilePath);
+                    resGetCrackInfo(strBuf);
                     break;
             }
+
+            free(strBuf);
         }
 
         // Delete temporary response file
-        remove(responseFilePath);
+        remove(resHeaderFile);
+        remove(resBodyFile);
 
         return resCode;
     } else {
@@ -471,7 +516,7 @@ void reqGetVendor(cJSON *vendorData)
     cJSON_Delete(vendorData);
 }
 
-void resGetVendor(const char *responseFilePath)
+void resGetVendor(char *resBody, const char *resHeaderFilePath)
 {
 }
 
@@ -479,7 +524,7 @@ void reqUpdateVendor(void)
 {
 }
 
-void resUpdateVendor(const char *responseFilePath)
+void resUpdateVendor(char *resBody)
 {
 }
 
@@ -495,7 +540,7 @@ void reqGetTask(void)
     cJSON_Delete(jsonReqData);
 }
 
-void resGetTask(const char *responseFilePath)
+void resGetTask(char *resBody)
 {
 }
 
@@ -503,7 +548,7 @@ void reqSendResult(void)
 {
 }
 
-void resSendResult(const char *responseFilePath)
+void resSendResult(char *resBody)
 {
 }
 
@@ -511,6 +556,6 @@ void reqGetCrackInfo(void)
 {
 }
 
-void resGetCrackInfo(const char *responseFilePath)
+void resGetCrackInfo(char *resBody)
 {
 }
