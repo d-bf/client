@@ -60,7 +60,7 @@
 #define URI_SEND_RESULT "task/result"
 
 static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log",
-    RES_BODY_FILE[] = "res-body.tmp", RES_HEADER_FILE[] = "res-header.tmp";
+    RES_BODY_FILE[] = "res-body.tmp";
 
 /* Global variables */
 
@@ -69,7 +69,11 @@ int sslVerify;
 
 /* Functions forward declaration */
 
-int fileExist(const char *filePath);
+int dirExists(const char *path);
+int fileExists(const char *path);
+void mkdirRecursive(char *path);
+int fileGetContents(char **contents, const char *path, const char *errorMessage);
+int fileCopy(const char *source, const char *target);
 void setCurrentPath(void);
 cJSON *getJsonObject(cJSON *object, const char *option, int exit);
 cJSON *getJsonFile(void);
@@ -82,16 +86,16 @@ void setUrlApiVer(void);
 const char *getReqUri(int req);
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream);
 int sendRequest(int reqType, cJSON *data);
-void reqGetVendor(cJSON *vendorData);
-void resGetVendor(char *resBody, const char *resHeaderFilePath);
+void reqGetVendor(cJSON *vendorFile);
+void resGetVendor(const char *resBodyPath, cJSON *vendorFile);
 void reqUpdateVendor(void);
-void resUpdateVendor(char *resBody);
+void resUpdateVendor(const char *resBodyPath);
 void reqGetTask(void);
-void resGetTask(char *resBody);
+void resGetTask(const char *resBodyPath);
 void reqSendResult(void);
-void resSendResult(char *resBody);
+void resSendResult(const char *resBodyPath);
 void reqGetCrackInfo(void);
-void resGetCrackInfo(char *resBody);
+void resGetCrackInfo(const char *resBodyPath);
 
 /* Main function entry point */
 
@@ -104,7 +108,7 @@ int main(int argc, char **argv)
 
     // Global libcurl initialization
     if (curl_global_init(CURL_GLOBAL_ALL) != 0) {
-        fprintf(stderr, "%s", "Error in initializing curl!");
+        fprintf(stderr, "%s\n", "Error in initializing curl!");
         return 1; // Exit
     }
 
@@ -117,10 +121,91 @@ int main(int argc, char **argv)
 
 /* Functions definition */
 
-int fileExist(const char *filePath)
+int dirExists(const char *path)
+{
+    struct stat info;
+
+    if (stat(path, &info) != 0)
+        return 0;
+    else
+        if (info.st_mode & S_IFDIR)
+            return 1;
+        else
+            return 0;
+}
+
+int fileExists(const char *path)
 {
     struct stat st;
-    return (stat(filePath, &st) == 0);
+    return (stat(path, &st) == 0);
+}
+
+void mkdirRecursive(char *path)
+{
+    if (fileExists(path))
+        return;
+
+    char *subpath, *fullpath;
+
+    fullpath = strdup(path);
+    subpath = strdup(path);
+    dirname(subpath);
+    if (strlen(subpath) > 1)
+        mkdirRecursive(subpath);
+    mkdir(fullpath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    free(fullpath);
+}
+
+int fileGetContents(char **contents, const char *path, const char *errorMessage)
+{
+    FILE *fileStream;
+
+    fileStream = fopen(path, "rb");
+    if (!fileStream) {
+        if (errorMessage)
+            fprintf(stderr, "%s\n", errorMessage);
+        return -1;
+    }
+
+    long fileLength;
+
+    fseek(fileStream, 0, SEEK_END);
+    fileLength = ftell(fileStream);
+    fseek(fileStream, 0, SEEK_SET);
+    *contents = (char *) malloc(fileLength + 1);
+    fread(*contents, 1, fileLength, fileStream);
+    fclose(fileStream);
+
+    return 0;
+}
+
+int fileCopy(const char *sourceFilePath, const char *targetFilePath)
+{
+    FILE *sourceStream, *targetStream;
+
+    sourceStream = fopen(sourceFilePath, "rb");
+    if (!sourceStream) {
+        fprintf(stderr, "%s%s\n", "Can't read file: ", sourceFilePath);
+    }
+
+    char *targetDirName = strdup(targetFilePath);
+    mkdirRecursive(dirname(targetDirName));
+    free(targetDirName);
+    targetStream = fopen(targetFilePath, "wb");
+    if (!targetStream) {
+        fclose(sourceStream);
+        fprintf(stderr, "%s%s\n", "Can't write file: ", targetFilePath);
+    }
+
+    int ch;
+
+    while ((ch = fgetc(sourceStream)) != EOF)
+        fputc(ch, targetStream);
+
+    fclose(sourceStream);
+    fclose(targetStream);
+
+    return 0;
 }
 
 void setCurrentPath(void)
@@ -138,9 +223,9 @@ cJSON *getJsonObject(cJSON *object, const char *option, int halt)
     jsonBuf = cJSON_GetObjectItem(object, option);
 
     if (!jsonBuf) {
-        if (halt) {
-            fprintf(stderr, "'%s' %s", option, "not found in config file!");
-            exit(1);
+        if (halt > -1) {
+            fprintf(stderr, "'%s' %s\n", option, "not found in config file!");
+            exit(halt);
         } else {
             return 0;
         }
@@ -151,34 +236,20 @@ cJSON *getJsonObject(cJSON *object, const char *option, int halt)
 
 cJSON *getJsonFile(void)
 {
-    char *strBuf;
-    FILE *configFile;
+    char filePath[PATH_MAX + 1], *strBuf;
 
-    strBuf = (char *) malloc(PATH_MAX + 1);
-    strcpy(strBuf, currentPath);
-    strcat(strBuf, CONFIG_FILE);
-    configFile = fopen(strBuf, "rb");
-    free(strBuf);
-    if (!configFile) {
-        fprintf(stderr, "%s", "Config file not found!");
+    strcpy(filePath, currentPath);
+    strcat(filePath, CONFIG_FILE);
+
+    if (fileGetContents(&strBuf, filePath, "Config file not found!") != 0)
         exit(1);
-    }
-
-    long configLen;
-
-    fseek(configFile, 0, SEEK_END);
-    configLen = ftell(configFile);
-    fseek(configFile, 0, SEEK_SET);
-    strBuf = (char *) malloc(configLen + 1);
-    fread(strBuf, 1, configLen, configFile);
-    fclose(configFile);
 
     cJSON *jsonBuf;
     jsonBuf = cJSON_Parse(strBuf);
     free(strBuf);
 
     if (!jsonBuf) {
-        fprintf(stderr, "%s", "Invalid JSON config file!");
+        fprintf(stderr, "%s\n", "Invalid JSON config file!");
         exit(1);
     }
 
@@ -202,7 +273,6 @@ void setPlatform(void)
 
     cJSON *jsonObj, *jsonArr = cJSON_CreateArray(), *vendorFile;
     char filePath[PATH_MAX + 1];
-    int getVendor = 0;
 
     // TODO: Add all platforms in loop
     strcpy(platformId, platformBase);
@@ -219,11 +289,9 @@ void setPlatform(void)
     strcat(filePath, PATH_SEPARATOR);
     strcat(filePath, "hashcat_cpu");
     strcat(filePath, PATH_SEPARATOR);
-    strcat(filePath, platformBase);
-    strcat(filePath, "_cpu");
+    strcat(filePath, platformId);
 
-    if (!fileExist(filePath)) {
-        getVendor = 1;
+    if (!fileExists(filePath)) {
         vendorFile = cJSON_CreateObject();
         cJSON_AddItemToObject(vendorFile, "type",
             cJSON_CreateString("cracker"));
@@ -231,16 +299,15 @@ void setPlatform(void)
             cJSON_CreateString("hashcat_cpu"));
         cJSON_AddItemToObject(vendorFile, "platform_id",
             cJSON_CreateString(platformId));
-    }
 
-    if (getVendor)
         reqGetVendor(vendorFile);
-    cJSON_Delete(vendorFile);
+        cJSON_Delete(vendorFile);
+    }
 
     // Update platform in config file
     cJSON *jsonBuf;
     jsonBuf = getJsonFile();
-    jsonBuf = getJsonObject(jsonBuf, "platform", 0);
+    jsonBuf = getJsonObject(jsonBuf, "platform", -1);
     if (jsonBuf) { // platform option exists in config file.
         jsonBuf = getJsonFile();
         cJSON_ReplaceItemInObject(jsonBuf, "platform", jsonArr);
@@ -258,7 +325,7 @@ void setPlatform(void)
     configFile = fopen(strBuf, "wb");
     free(strBuf);
     if (!configFile) {
-        fprintf(stderr, "%s", "Config file not found!");
+        fprintf(stderr, "%s\n", "Config file not found!");
         exit(1);
     }
     strBuf = cJSON_Print(jsonBuf);
@@ -405,6 +472,7 @@ int sendRequest(int reqType, cJSON *data)
 
         // Set request URL
         char urlStr[1025];
+
         strcpy(urlStr, urlApiVer);
         strcat(urlStr, getReqUri(reqType));
 
@@ -415,6 +483,7 @@ int sendRequest(int reqType, cJSON *data)
 
         // Set post data
         char *strBuf;
+
         if (data) { // If the input json is valid
             strBuf = cJSON_PrintUnformatted(data);
             if (strBuf)
@@ -426,83 +495,51 @@ int sendRequest(int reqType, cJSON *data)
         }
 
         // Set callback for writing received data
-        FILE *resHeaderFile, *resBodyFile;
-        char resHeaderFilePath[PATH_MAX + 1], resBodyFilePath[PATH_MAX + 1];
-
-        strcpy(resHeaderFilePath, currentPath);
-        strcat(resHeaderFilePath, RES_HEADER_FILE);
-        resHeaderFile = fopen(resHeaderFilePath, "wb");
-        if (!resHeaderFile) {
-            curl_easy_cleanup(curl);
-
-            fprintf(stderr, "%s", "Can't write response header file!");
-            return -1;
-        }
+        char resBodyFilePath[PATH_MAX + 1];
+        FILE *resBodyFile;
 
         strcpy(resBodyFilePath, currentPath);
         strcat(resBodyFilePath, RES_BODY_FILE);
         resBodyFile = fopen(resBodyFilePath, "wb");
         if (!resBodyFile) {
             curl_easy_cleanup(curl);
-            fclose(resHeaderFile);
 
-            fprintf(stderr, "%s", "Can't write response body file!");
+            fprintf(stderr, "%s\n", "Can't write response body file!");
             return -1;
         }
 
-        curl_easy_setopt(curl, CURLOPT_HEADERDATA, resHeaderFile);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, resBodyFile);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFunction);
 
         CURLcode resCode = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
-        fclose(resHeaderFile);
         fclose(resBodyFile);
 
-        if (data)
+        if (data && strBuf)
             free(strBuf);
 
         if (resCode == CURLE_OK) { // Request completed successfully, so process the response
-            // Read response file
-            resBodyFile = fopen(resBodyFilePath, "rb");
-            if (!resBodyFile) {
-                fprintf(stderr, "%s", "Can't read response body file!");
-                return -1;
-            }
-
-            long resLen;
-
-            fseek(resBodyFile, 0, SEEK_END);
-            resLen = ftell(resBodyFile);
-            fseek(resBodyFile, 0, SEEK_SET);
-            strBuf = (char *) malloc(resLen + 1);
-            fread(strBuf, 1, resLen, resBodyFile);
-            fclose(resBodyFile);
-
             switch (reqType) {
                 case REQ_GET_VENDOR:
-                    resGetVendor(strBuf, resHeaderFilePath);
+                    resGetVendor(resBodyFilePath, data);
                     break;
                 case REQ_UPDATE_VENDOR:
-                    resUpdateVendor(strBuf);
+                    resUpdateVendor(resBodyFilePath);
                     break;
                 case REQ_GET_TASK:
-                    resGetTask(strBuf);
+                    resGetTask(resBodyFilePath);
                     break;
                 case REQ_SEND_RESULT:
-                    resSendResult(strBuf);
+                    resSendResult(resBodyFilePath);
                     break;
                 case REQ_GET_CRACK_INFO:
-                    resGetCrackInfo(strBuf);
+                    resGetCrackInfo(resBodyFilePath);
                     break;
             }
-
-            free(strBuf);
         }
 
         // Delete temporary response file
-        remove(resHeaderFile);
-        remove(resBodyFile);
+        remove(resBodyFilePath);
 
         return resCode;
     } else {
@@ -510,21 +547,35 @@ int sendRequest(int reqType, cJSON *data)
     }
 }
 
-void reqGetVendor(cJSON *vendorData)
+void reqGetVendor(cJSON *vendorFile)
 {
-    sendRequest(REQ_GET_VENDOR, vendorData);
-    cJSON_Delete(vendorData);
+    sendRequest(REQ_GET_VENDOR, vendorFile);
 }
 
-void resGetVendor(char *resBody, const char *resHeaderFilePath)
+void resGetVendor(const char *resBodyPath, cJSON *vendorFile)
 {
+    char vendorFilePath[PATH_MAX + 1];
+
+    strcpy(vendorFilePath, currentPath);
+    strcat(vendorFilePath, "vendor");
+    strcat(vendorFilePath, PATH_SEPARATOR);
+    strcat(vendorFilePath, getJsonObject(vendorFile, "type", -1)->valuestring);
+    strcat(vendorFilePath, PATH_SEPARATOR);
+    strcat(vendorFilePath, getJsonObject(vendorFile, "name", -1)->valuestring);
+    strcat(vendorFilePath, PATH_SEPARATOR);
+    strcat(vendorFilePath,
+        getJsonObject(vendorFile, "platform_id", -1)->valuestring);
+
+    fileCopy(resBodyPath, vendorFilePath);
+
+    chmod(vendorFilePath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
 void reqUpdateVendor(void)
 {
 }
 
-void resUpdateVendor(char *resBody)
+void resUpdateVendor(const char *resBodyPath)
 {
 }
 
@@ -540,7 +591,7 @@ void reqGetTask(void)
     cJSON_Delete(jsonReqData);
 }
 
-void resGetTask(char *resBody)
+void resGetTask(const char *resBodyPath)
 {
 }
 
@@ -548,7 +599,7 @@ void reqSendResult(void)
 {
 }
 
-void resSendResult(char *resBody)
+void resSendResult(const char *resBodyPath)
 {
 }
 
@@ -556,6 +607,6 @@ void reqGetCrackInfo(void)
 {
 }
 
-void resGetCrackInfo(char *resBody)
+void resGetCrackInfo(const char *resBodyPath)
 {
 }
