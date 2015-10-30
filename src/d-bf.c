@@ -69,6 +69,7 @@ int sslVerify;
 
 /* Functions forward declaration */
 
+char *getDirName(char *path);
 int dirExists(const char *path);
 int fileExists(const char *path);
 void mkdirRecursive(char *path);
@@ -120,6 +121,12 @@ int main(int argc, char **argv)
 }
 
 /* Functions definition */
+
+char *getDirName(char *path)
+{
+    dirname(path);
+    return path;
+}
 
 int dirExists(const char *path)
 {
@@ -271,8 +278,8 @@ void setPlatform(void)
     strcat(platformBase, "_");
     strcat(platformBase, archName);
 
-    cJSON *jsonObj, *jsonArr = cJSON_CreateArray(), *vendorFile;
-    char filePath[PATH_MAX + 1];
+    cJSON *jsonObj, *jsonArr = cJSON_CreateArray(), *vendorData = NULL;
+    char vendorPath[PATH_MAX + 1];
 
     // TODO: Add all platforms in loop
     strcpy(platformId, platformBase);
@@ -281,28 +288,54 @@ void setPlatform(void)
     cJSON_AddItemToObject(jsonObj, "id", cJSON_CreateString(platformId));
     cJSON_AddItemReferenceToArray(jsonArr, jsonObj);
 
-    // Check default vendor file
-    strcpy(filePath, currentPath);
-    strcat(filePath, "vendor");
-    strcat(filePath, PATH_SEPARATOR);
-    strcat(filePath, "cracker");
-    strcat(filePath, PATH_SEPARATOR);
-    strcat(filePath, "hashcat_cpu");
-    strcat(filePath, PATH_SEPARATOR);
-    strcat(filePath, platformId);
-
-    if (!fileExists(filePath)) {
-        vendorFile = cJSON_CreateObject();
-        cJSON_AddItemToObject(vendorFile, "type",
+    // Check default vendor info
+    strcpy(vendorPath, currentPath);
+    strcat(vendorPath, "vendor");
+    strcat(vendorPath, PATH_SEPARATOR);
+    strcat(vendorPath, "cracker");
+    strcat(vendorPath, PATH_SEPARATOR);
+    strcat(vendorPath, "hashcat_cpu");
+    strcat(vendorPath, PATH_SEPARATOR);
+    strcat(vendorPath, "config.json");
+    if (!fileExists(vendorPath)) {
+        vendorData = cJSON_CreateObject();
+        cJSON_AddItemToObject(vendorData, "object_type",
+            cJSON_CreateString("info"));
+        cJSON_AddItemToObject(vendorData, "vendor_type",
             cJSON_CreateString("cracker"));
-        cJSON_AddItemToObject(vendorFile, "name",
+        cJSON_AddItemToObject(vendorData, "name",
             cJSON_CreateString("hashcat_cpu"));
-        cJSON_AddItemToObject(vendorFile, "platform_id",
+        cJSON_AddItemToObject(vendorData, "platform_id",
             cJSON_CreateString(platformId));
 
-        reqGetVendor(vendorFile);
-        cJSON_Delete(vendorFile);
+        reqGetVendor(vendorData);
     }
+
+    // Check default vendor file
+    strcpy(vendorPath, getDirName(vendorPath));
+    strcat(vendorPath, PATH_SEPARATOR);
+    strcat(vendorPath, platformId);
+    if (!fileExists(vendorPath)) {
+        if (vendorData) {
+            strcpy(cJSON_GetObjectItem(vendorData, "object_type")->valuestring,
+                "file");
+        } else {
+            vendorData = cJSON_CreateObject();
+            cJSON_AddItemToObject(vendorData, "object_type",
+                cJSON_CreateString("file"));
+            cJSON_AddItemToObject(vendorData, "vendor_type",
+                cJSON_CreateString("cracker"));
+            cJSON_AddItemToObject(vendorData, "name",
+                cJSON_CreateString("hashcat_cpu"));
+            cJSON_AddItemToObject(vendorData, "platform_id",
+                cJSON_CreateString(platformId));
+        }
+
+        reqGetVendor(vendorData);
+    }
+
+    if (vendorData)
+        cJSON_Delete(vendorData);
 
     // Update platform in config file
     cJSON *jsonBuf;
@@ -547,28 +580,35 @@ int sendRequest(int reqType, cJSON *data)
     }
 }
 
-void reqGetVendor(cJSON *vendorFile)
+void reqGetVendor(cJSON *vendorData)
 {
-    sendRequest(REQ_GET_VENDOR, vendorFile);
+    sendRequest(REQ_GET_VENDOR, vendorData);
 }
 
-void resGetVendor(const char *resBodyPath, cJSON *vendorFile)
+void resGetVendor(const char *resBodyPath, cJSON *vendorData)
 {
-    char vendorFilePath[PATH_MAX + 1];
+    char vendorResPath[PATH_MAX + 1];
 
-    strcpy(vendorFilePath, currentPath);
-    strcat(vendorFilePath, "vendor");
-    strcat(vendorFilePath, PATH_SEPARATOR);
-    strcat(vendorFilePath, getJsonObject(vendorFile, "type", -1)->valuestring);
-    strcat(vendorFilePath, PATH_SEPARATOR);
-    strcat(vendorFilePath, getJsonObject(vendorFile, "name", -1)->valuestring);
-    strcat(vendorFilePath, PATH_SEPARATOR);
-    strcat(vendorFilePath,
-        getJsonObject(vendorFile, "platform_id", -1)->valuestring);
+    strcpy(vendorResPath, currentPath);
+    strcat(vendorResPath, "vendor");
+    strcat(vendorResPath, PATH_SEPARATOR);
+    strcat(vendorResPath,
+        getJsonObject(vendorData, "vendor_type", -1)->valuestring);
+    strcat(vendorResPath, PATH_SEPARATOR);
+    strcat(vendorResPath, getJsonObject(vendorData, "name", -1)->valuestring);
+    strcat(vendorResPath, PATH_SEPARATOR);
 
-    fileCopy(resBodyPath, vendorFilePath);
+    if (strcmp(getJsonObject(vendorData, "object_type", -1)->valuestring,
+        "info") == 0) // Vendor info
+        strcat(vendorResPath, "config.json");
+    else
+        // Vendor file
+        strcat(vendorResPath,
+            getJsonObject(vendorData, "platform_id", -1)->valuestring);
 
-    chmod(vendorFilePath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    fileCopy(resBodyPath, vendorResPath);
+
+    chmod(vendorResPath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
 void reqUpdateVendor(void)
