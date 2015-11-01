@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 #include <sys/stat.h>
 
 #include "curl/curl.h"
@@ -78,6 +79,8 @@ int fileCopy(const char *source, const char *target);
 void setCurrentPath(void);
 cJSON *getJsonObject(cJSON *object, const char *option, int exit);
 cJSON *getJsonFile(void);
+double getBench(char *benchStr);
+long long int getBenchCpu(const char *vendorPath);
 void setPlatform(void);
 int getNumOfCpu(void);
 void chkConfigs(void);
@@ -107,7 +110,7 @@ int main(int argc, char **argv)
     setUrlApiVer();
     chkConfigs();
 
-    // Global libcurl initialization
+// Global libcurl initialization
     if (curl_global_init(CURL_GLOBAL_ALL) != 0) {
         fprintf(stderr, "%s\n", "Error in initializing curl!");
         return 1; // Exit
@@ -134,11 +137,10 @@ int dirExists(const char *path)
 
     if (stat(path, &info) != 0)
         return 0;
+    else if (info.st_mode & S_IFDIR)
+        return 1;
     else
-        if (info.st_mode & S_IFDIR)
-            return 1;
-        else
-            return 0;
+        return 0;
 }
 
 int fileExists(const char *path)
@@ -263,6 +265,61 @@ cJSON *getJsonFile(void)
     return jsonBuf;
 }
 
+double getBench(char *benchStr)
+{
+    double bench = 0;
+
+    while (*benchStr) {
+        if (isdigit(*benchStr)) {
+            bench = strtod(benchStr, &benchStr);
+            break;
+        } else {
+            benchStr++;
+        }
+    }
+
+    if ((*benchStr == ' ')) {
+        bench /= 1048576;
+    } else if ((*benchStr == 'k') || (*benchStr == 'K')) { // Kilo
+        bench /= 1024;
+    } else if ((*benchStr == 'g') || (*benchStr == 'G')) { // Giga
+        bench *= 1024;
+    } else if ((*benchStr == 't') || (*benchStr == 'T')) { // Tera
+        bench *= 1048576;
+    } else if ((*benchStr == 'p') || (*benchStr == 'P')) { // Peta
+        bench *= 1073741824;
+    } else if ((*benchStr == 'e') || (*benchStr == 'E')) { // Exa
+        bench *= 1099511627776;
+    } else if ((*benchStr == 'z') || (*benchStr == 'Z')) { // Zetta
+        bench *= 1125899906842624;
+    } else if ((*benchStr == 'y') || (*benchStr == 'Y')) { // Yotta
+        bench *= 1152921504606846976;
+    }
+
+    return bench;
+}
+
+long long int getBenchCpu(const char *vendorPath)
+{
+    char benchStr[256], cmdBench[PATH_MAX + 1];
+    FILE *benchStream;
+    double bench = 0;
+
+    strcpy(cmdBench, vendorPath);
+    strcat(cmdBench, " -b -m0");
+    if (!(benchStream = popen(cmdBench, "r"))) {
+        exit(1);
+    }
+    while (fgets(benchStr, sizeof(benchStr) - 1, benchStream) != NULL) {
+        if (strncmp(benchStr, "Speed/sec: ", 11) == 0) {
+            bench += getBench(benchStr);
+        }
+    }
+    pclose(benchStream);
+
+    return llround(bench / 1);
+}
+
 void setPlatform(void)
 {
     char platformBase[9], platformId[20];
@@ -286,7 +343,6 @@ void setPlatform(void)
     strcat(platformId, "_cpu");
     jsonObj = cJSON_CreateObject();
     cJSON_AddItemToObject(jsonObj, "id", cJSON_CreateString(platformId));
-    cJSON_AddItemReferenceToArray(jsonArr, jsonObj);
 
     // Check default vendor info
     strcpy(vendorPath, currentPath);
@@ -336,6 +392,12 @@ void setPlatform(void)
 
     if (vendorData)
         cJSON_Delete(vendorData);
+
+    // Benchmark
+    cJSON_AddItemToObject(jsonObj, "benchmark",
+        cJSON_CreateNumber(getBenchCpu(vendorPath)));
+
+    cJSON_AddItemReferenceToArray(jsonArr, jsonObj);
 
     // Update platform in config file
     cJSON *jsonBuf;
