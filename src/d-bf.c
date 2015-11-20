@@ -82,9 +82,7 @@ cJSON *getJsonFile(void);
 double getBench(char *benchStr);
 long long int getBenchCpu(const char *vendorPath);
 void setPlatform(void);
-int getNumOfCpu(void);
 void chkConfigs(void);
-unsigned long long int benchmark(void);
 cJSON *getPlatform(void);
 void setUrlApiVer(void);
 const char *getReqUri(int req);
@@ -308,6 +306,7 @@ long long int getBenchCpu(const char *vendorPath)
     strcpy(cmdBench, vendorPath);
     strcat(cmdBench, " -b -m0");
     if (!(benchStream = popen(cmdBench, "r"))) {
+        fprintf(stderr, "%s%s\n", "Can't get benchmark: ", cmdBench);
         exit(1);
     }
     while (fgets(benchStr, sizeof(benchStr) - 1, benchStream) != NULL) {
@@ -434,70 +433,9 @@ void setPlatform(void)
     jsonBuf = NULL;
 }
 
-int getNumOfCpu(void)
-{
-    int pu = 0;
-#if defined(_WIN32) || defined(_WIN64)
-#ifndef _SC_NPROCESSORS_ONLN
-    SYSTEM_INFO info;
-    GetSystemInfo(&info);
-#define sysconf(a) info.dwNumberOfProcessors
-#define _SC_NPROCESSORS_ONLN
-#endif
-#endif
-#ifdef _SC_NPROCESSORS_ONLN
-    pu = sysconf(_SC_NPROCESSORS_ONLN);
-#endif
-
-    if (pu > 0)
-        return pu;
-    else
-        return 1;
-}
-
 void chkConfigs(void)
 {
     setPlatform();
-}
-
-unsigned long long int benchmark(void)
-{
-#ifdef CLOCK_PROCESS_CPUTIME_ID
-    /* cpu time in the current process */
-#define CLOCKTYPE  CLOCK_PROCESS_CPUTIME_ID
-#else
-    /* this one should be appropriate to avoid errors on multiprocessors systems */
-#define CLOCKTYPE  CLOCK_MONOTONIC
-#endif
-
-    struct timespec ts, te;
-    int i, cores = getNumOfCpu();
-    long elaps_ns;
-    double elapse;
-    unsigned long long int hashes, benchmark = 0;
-    char *b64Enc, b64Input[2] = "X";
-
-    for (i = 0; i < cores; i++) {
-        clock_gettime(CLOCKTYPE, &ts);
-        hashes = 1;
-        while (1) {
-            b64Enc = (char *) malloc(Base64encode_len(strlen(b64Input)) + 1);
-            Base64encode(b64Enc, b64Input, strlen(b64Input));
-            free(b64Enc);
-
-            clock_gettime(CLOCKTYPE, &te);
-            elapse = difftime(te.tv_sec, ts.tv_sec);
-            if (elapse > 0)
-                break;
-            hashes++;
-        }
-
-        elaps_ns = te.tv_nsec - ts.tv_nsec;
-        elapse += ((double) elaps_ns) / 1.0e9;
-        benchmark += (unsigned long long int) (hashes / elapse) + 0.5;
-    }
-
-    return benchmark;
 }
 
 cJSON *getPlatform(void)
