@@ -46,6 +46,8 @@
 #endif
 
 /* Constants */
+#define MAX_URL_LEN 2049
+
 #define ARCH_NAME_32 "32"
 #define ARCH_NAME_64 "64"
 
@@ -61,7 +63,7 @@
 #define URI_SEND_RESULT "task/result"
 
 static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log",
-    RES_BODY_FILE[] = "res-body.tmp";
+RES_BODY_FILE[] = "res-body.tmp";
 
 /* Global variables */
 
@@ -86,18 +88,19 @@ void chkConfigs(void);
 cJSON *getPlatform(void);
 void setUrlApiVer(void);
 const char *getReqUri(int req);
+void doCrack(const char *crackInfoPath, cJSON *taskInfo);
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream);
 int sendRequest(int reqType, cJSON *data);
 void reqGetVendor(cJSON *vendorFile);
-void resGetVendor(const char *resBodyPath, cJSON *vendorFile);
+void resGetVendor(const char *resBodyPath, cJSON *reqData);
 void reqUpdateVendor(void);
 void resUpdateVendor(const char *resBodyPath);
 void reqGetTask(void);
 void resGetTask(const char *resBodyPath);
 void reqSendResult(void);
 void resSendResult(const char *resBodyPath);
-void reqGetCrackInfo(void);
-void resGetCrackInfo(const char *resBodyPath);
+void reqGetCrackInfo(const char *crackId);
+void resGetCrackInfo(const char *resBodyPath, cJSON *reqData);
 
 /* Main function entry point */
 
@@ -108,11 +111,14 @@ int main(int argc, char **argv)
     setUrlApiVer();
     chkConfigs();
 
-// Global libcurl initialization
+    // Global libcurl initialization
     if (curl_global_init(CURL_GLOBAL_ALL) != 0) {
         fprintf(stderr, "%s\n", "Error in initializing curl!");
         return 1; // Exit
     }
+
+    // TODO: Infinite loop
+    reqGetTask();
 
     // Destroy
     free(urlApiVer);
@@ -450,7 +456,7 @@ cJSON *getPlatform(void)
 void setUrlApiVer(void)
 {
     cJSON *jsonBuf;
-    char strBuf[1025];
+    char strBuf[MAX_URL_LEN];
 
     jsonBuf = getJsonFile();
     jsonBuf = getJsonObject(jsonBuf, "server", 1);
@@ -484,6 +490,28 @@ const char *getReqUri(int req)
     return "";
 }
 
+/**
+ * cJSON taskInfo {"crack_id":"", "start":"", "offset":"", "platform":""}
+ */
+void doCrack(const char *crackInfoPath, cJSON *taskInfo)
+{
+    char *strBuf;
+
+    if (fileGetContents(&strBuf, crackInfoPath) != 0) {
+        cJSON *jsonBuf;
+        jsonBuf = cJSON_Parse(strBuf);
+        free(strBuf);
+
+        if (jsonBuf) {
+            // Do crack here
+        } else {
+            fprintf(stderr, "Invalid JSON in crack info file: %s\n", crackInfoPath);
+        }
+    } else {
+        fprintf(stderr, "Can't open crack info file: %s\n", crackInfoPath);
+    }
+}
+
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream)
 {
     size_t written = fwrite(ptr, size, nmemb, (FILE *) stream);
@@ -504,7 +532,7 @@ int sendRequest(int reqType, cJSON *data)
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         // Set request URL
-        char urlStr[1025];
+        char urlStr[MAX_URL_LEN];
 
         strcpy(urlStr, urlApiVer);
         strcat(urlStr, getReqUri(reqType));
@@ -566,7 +594,7 @@ int sendRequest(int reqType, cJSON *data)
                     resSendResult(resBodyFilePath);
                     break;
                 case REQ_GET_CRACK_INFO:
-                    resGetCrackInfo(resBodyFilePath);
+                    resGetCrackInfo(resBodyFilePath, data);
                     break;
             }
         }
@@ -585,7 +613,7 @@ void reqGetVendor(cJSON *vendorData)
     sendRequest(REQ_GET_VENDOR, vendorData);
 }
 
-void resGetVendor(const char *resBodyPath, cJSON *vendorData)
+void resGetVendor(const char *resBodyPath, cJSON *reqData)
 {
     char vendorResPath[PATH_MAX + 1];
 
@@ -593,22 +621,22 @@ void resGetVendor(const char *resBodyPath, cJSON *vendorData)
     strcat(vendorResPath, "vendor");
     strcat(vendorResPath, PATH_SEPARATOR);
     strcat(vendorResPath,
-        getJsonObject(vendorData, "vendor_type", -1)->valuestring);
+        getJsonObject(reqData, "vendor_type", -1)->valuestring);
     strcat(vendorResPath, PATH_SEPARATOR);
-    strcat(vendorResPath, getJsonObject(vendorData, "name", -1)->valuestring);
+    strcat(vendorResPath, getJsonObject(reqData, "name", -1)->valuestring);
     strcat(vendorResPath, PATH_SEPARATOR);
 
-    if (strcmp(getJsonObject(vendorData, "object_type", -1)->valuestring,
+    if (strcmp(getJsonObject(reqData, "object_type", -1)->valuestring,
         "info") == 0) // Vendor info
         strcat(vendorResPath, "config.json");
     else
         // Vendor file
         strcat(vendorResPath,
-            getJsonObject(vendorData, "platform_id", -1)->valuestring);
+            getJsonObject(reqData, "platform_id", -1)->valuestring);
 
     fileCopy(resBodyPath, vendorResPath);
 
-    chmod(vendorResPath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    chmod(vendorResPath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); // rwx rwx r-x (775)
 }
 
 void reqUpdateVendor(void)
@@ -633,6 +661,37 @@ void reqGetTask(void)
 
 void resGetTask(const char *resBodyPath)
 {
+    char *strBuf;
+
+    if (fileGetContents(&strBuf, resBodyPath, "Error in reading response file of get task!") == 0) {
+        cJSON *jsonTasks;
+        jsonTasks = cJSON_Parse(strBuf);
+        free(strBuf);
+
+        if (jsonTasks) {
+            cJSON *jsonTask = jsonTasks->child;
+            char crackInfoPath[PATH_MAX + 1];
+            while(jsonTask) {
+                // {"crack_id":"","start":"","offset":"","platform":""}
+                strcpy(crackInfoPath, currentPath);
+                strcat(crackInfoPath, "crack");
+                strcat(crackInfoPath, PATH_SEPARATOR);
+                strcat(crackInfoPath, cJSON_GetObjectItem(jsonTask, "crack_id")->valuestring);
+                strcat(crackInfoPath, PATH_SEPARATOR);
+                strcat(crackInfoPath, "info.json");
+
+                if (!fileExists(crackInfoPath)) { // Get crack info if needed
+                    reqGetCrackInfo(cJSON_GetObjectItem(jsonTask, "crack_id")->valuestring);
+                }
+
+                doCrack(crackInfoPath, jsonTask);
+
+                jsonTask = jsonTask->next;
+            }
+        } else {
+            fprintf(stderr, "%s\n", "Invalid JSON response file for get task!");
+        }
+    }
 }
 
 void reqSendResult(void)
@@ -643,10 +702,28 @@ void resSendResult(const char *resBodyPath)
 {
 }
 
-void reqGetCrackInfo(void)
+void reqGetCrackInfo(const char *crackId)
 {
+    cJSON *jsonReqData = cJSON_CreateObject();
+
+    cJSON_AddItemToObject(jsonReqData, "id", cJSON_CreateString(crackId));
+
+    sendRequest(REQ_GET_CRACK_INFO, jsonReqData);
+    cJSON_Delete(jsonReqData);
 }
 
-void resGetCrackInfo(const char *resBodyPath)
+void resGetCrackInfo(const char *resBodyPath, cJSON *reqData)
 {
+    char crackInfoPath[PATH_MAX + 1];
+
+    strcpy(crackInfoPath, currentPath);
+    strcat(crackInfoPath, "crack");
+    strcat(crackInfoPath, PATH_SEPARATOR);
+    strcat(crackInfoPath, cJSON_GetObjectItem(reqData, "id")->valuestring);
+    strcat(crackInfoPath, PATH_SEPARATOR);
+    strcat(crackInfoPath, "info.json");
+
+    fileCopy(resBodyPath, crackInfoPath);
+
+    chmod(crackInfoPath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); // rwx rwx r-x (775)
 }
