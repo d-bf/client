@@ -63,7 +63,7 @@
 #define URI_SEND_RESULT "task/result"
 
 static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log",
-RES_BODY_FILE[] = "res-body.tmp";
+    RES_BODY_FILE[] = "res-body.tmp";
 
 /* Global variables */
 
@@ -344,8 +344,8 @@ void setPlatform(void)
     char vendorPath[PATH_MAX + 1];
 
     // TODO: Add all platforms in loop
-    strcpy(platformId, platformBase);
-    strcat(platformId, "_cpu");
+    strcpy(platformId, "cpu_");
+    strcat(platformId, platformBase);
     jsonObj = cJSON_CreateObject();
     cJSON_AddItemToObject(jsonObj, "id", cJSON_CreateString(platformId));
 
@@ -505,7 +505,8 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
         if (jsonBuf) {
             // Do crack here
         } else {
-            fprintf(stderr, "Invalid JSON in crack info file: %s\n", crackInfoPath);
+            fprintf(stderr, "Invalid JSON in crack info file: %s\n",
+                crackInfoPath);
         }
     } else {
         fprintf(stderr, "Can't open crack info file: %s\n", crackInfoPath);
@@ -626,8 +627,8 @@ void resGetVendor(const char *resBodyPath, cJSON *reqData)
     strcat(vendorResPath, getJsonObject(reqData, "name", -1)->valuestring);
     strcat(vendorResPath, PATH_SEPARATOR);
 
-    if (strcmp(getJsonObject(reqData, "object_type", -1)->valuestring,
-        "info") == 0) // Vendor info
+    if (strcmp(getJsonObject(reqData, "object_type", -1)->valuestring, "info")
+        == 0) // Vendor info
         strcat(vendorResPath, "config.json");
     else
         // Vendor file
@@ -663,7 +664,8 @@ void resGetTask(const char *resBodyPath)
 {
     char *strBuf;
 
-    if (fileGetContents(&strBuf, resBodyPath, "Error in reading response file of get task!") == 0) {
+    if (fileGetContents(&strBuf, resBodyPath,
+        "Error in reading response file of get task!") == 0) {
         cJSON *jsonTasks;
         jsonTasks = cJSON_Parse(strBuf);
         free(strBuf);
@@ -671,17 +673,19 @@ void resGetTask(const char *resBodyPath)
         if (jsonTasks) {
             cJSON *jsonTask = jsonTasks->child;
             char crackInfoPath[PATH_MAX + 1];
-            while(jsonTask) {
+            while (jsonTask) {
                 // {"crack_id":"","start":"","offset":"","platform":""}
                 strcpy(crackInfoPath, currentPath);
                 strcat(crackInfoPath, "crack");
                 strcat(crackInfoPath, PATH_SEPARATOR);
-                strcat(crackInfoPath, cJSON_GetObjectItem(jsonTask, "crack_id")->valuestring);
+                strcat(crackInfoPath,
+                    cJSON_GetObjectItem(jsonTask, "crack_id")->valuestring);
                 strcat(crackInfoPath, PATH_SEPARATOR);
                 strcat(crackInfoPath, "info.json");
 
                 if (!fileExists(crackInfoPath)) { // Get crack info if needed
-                    reqGetCrackInfo(cJSON_GetObjectItem(jsonTask, "crack_id")->valuestring);
+                    reqGetCrackInfo(
+                        cJSON_GetObjectItem(jsonTask, "crack_id")->valuestring);
                 }
 
                 doCrack(crackInfoPath, jsonTask);
