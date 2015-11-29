@@ -62,7 +62,8 @@
 #define REQ_SEND_RESULT 5
 #define URI_SEND_RESULT "task/result"
 
-static const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log",
+char CONFIG_PATH[8] = "config";
+const char CONFIG_FILE[] = "d-bf.json", LOG_FILE[] = "d-bf.log",
     RES_BODY_FILE[] = "res-body.tmp";
 
 /* Global variables */
@@ -79,12 +80,12 @@ void mkdirRecursive(char *path);
 int fileGetContents(char **contents, const char *path, const char *errorMessage);
 int fileCopy(const char *source, const char *target);
 void setCurrentPath(void);
+void chkConfigs(void);
 cJSON *getJsonObject(cJSON *object, const char *option, int exit);
 cJSON *getJsonFile(void);
 double getBench(char *benchStr);
 long long int getBenchCpu(const char *vendorPath);
 void setPlatform(void);
-void chkConfigs(void);
 cJSON *getPlatform(void);
 void setUrlApiVer(void);
 const char *getReqUri(int req);
@@ -108,8 +109,9 @@ int main(int argc, char **argv)
 {
     /* Initialization */
     setCurrentPath();
-    setUrlApiVer();
     chkConfigs();
+    setUrlApiVer();
+    setPlatform();
 
     // Global libcurl initialization
     if (curl_global_init(CURL_GLOBAL_ALL) != 0) {
@@ -229,6 +231,48 @@ void setCurrentPath(void)
     strcat(currentPath, "/");
 }
 
+void chkConfigs(void)
+{
+    // Create config path directory
+    char configFilePath[PATH_MAX + 1];
+    strcpy(configFilePath, currentPath);
+    strcat(configFilePath, CONFIG_PATH);
+    mkdirRecursive(configFilePath);
+
+    strcat(CONFIG_PATH, PATH_SEPARATOR);
+
+    strcat(configFilePath, PATH_SEPARATOR);
+    strcat(configFilePath, CONFIG_FILE);
+
+    if (!fileExists(configFilePath)) {
+        FILE *configFile;
+        configFile = fopen(configFilePath, "wb");
+        if (!configFile) {
+            fprintf(stderr, "%s\n", "Can not create config file!");
+            exit(1);
+        }
+
+        cJSON *jsonServer = cJSON_CreateObject(), *jsonBuf =
+            cJSON_CreateObject();
+        cJSON_AddItemToObject(jsonBuf, "url_api", cJSON_CreateString(""));
+        cJSON_AddItemToObject(jsonBuf, "version", cJSON_CreateString("v1"));
+        cJSON_AddItemToObject(jsonBuf, "ssl_verify", cJSON_CreateNumber(0));
+        cJSON_AddItemReferenceToObject(jsonServer, "server", jsonBuf);
+
+        char *strBuf = cJSON_Print(jsonServer);
+        fputs(strBuf, configFile);
+        fclose(configFile);
+
+        free(strBuf);
+        cJSON_Delete(jsonServer);
+
+        fprintf(stdout,
+            "Please enter server's URL in url_api in config file: %s\n",
+            configFilePath);
+        exit(1);
+    }
+}
+
 cJSON *getJsonObject(cJSON *object, const char *option, int halt)
 {
     cJSON *jsonBuf;
@@ -252,6 +296,7 @@ cJSON *getJsonFile(void)
     char filePath[PATH_MAX + 1], *strBuf;
 
     strcpy(filePath, currentPath);
+    strcat(filePath, CONFIG_PATH);
     strcat(filePath, CONFIG_FILE);
 
     if (fileGetContents(&strBuf, filePath, "Config file not found!") != 0)
@@ -421,6 +466,7 @@ void setPlatform(void)
     FILE *configFile;
     strBuf = (char *) malloc(PATH_MAX + 1);
     strcpy(strBuf, currentPath);
+    strcat(strBuf, CONFIG_PATH);
     strcat(strBuf, CONFIG_FILE);
     configFile = fopen(strBuf, "wb");
     free(strBuf);
@@ -437,11 +483,6 @@ void setPlatform(void)
     jsonObj = NULL;
     jsonArr = NULL;
     jsonBuf = NULL;
-}
-
-void chkConfigs(void)
-{
-    setPlatform();
 }
 
 cJSON *getPlatform(void)
@@ -462,6 +503,13 @@ void setUrlApiVer(void)
     jsonBuf = getJsonObject(jsonBuf, "server", 1);
 
     strcpy(strBuf, getJsonObject(jsonBuf, "url_api", 1)->valuestring);
+
+    // TODO: Validate url
+    if (strlen(strBuf) < 1) {
+        fprintf(stderr, "Server URL is not valid: %s\n", strBuf);
+        exit(1);
+    }
+
     strcat(strBuf, "/");
     strcat(strBuf, getJsonObject(jsonBuf, "version", 1)->valuestring);
     strcat(strBuf, "/");
@@ -497,7 +545,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
 {
     char *strBuf;
 
-    if (fileGetContents(&strBuf, crackInfoPath) != 0) {
+    if (fileGetContents(&strBuf, crackInfoPath, NULL) != 0) {
         cJSON *jsonBuf;
         jsonBuf = cJSON_Parse(strBuf);
         free(strBuf);
@@ -598,6 +646,9 @@ int sendRequest(int reqType, cJSON *data)
                     resGetCrackInfo(resBodyFilePath, data);
                     break;
             }
+        } else {
+            fprintf(stderr, "Server response is not valid. Server url is: %s\n",
+                urlStr);
         }
 
         // Delete temporary response file
