@@ -80,7 +80,8 @@ char *getDirName(char *path);
 int dirExists(const char *path);
 int fileExists(const char *path);
 void mkdirRecursive(char *path);
-int fileGetContents(char **contents, const char *path, const char *errorMessage);
+long int fileGetContents(char **contents, const char *path,
+    const char *errorMessage);
 int fileCopy(const char *source, const char *target);
 void setCurrentPath(void);
 void chkConfigs(void);
@@ -94,7 +95,7 @@ cJSON *getPlatform(void);
 void setUrlApiVer(void);
 void chkServerDependentConfigs(void);
 const char *getReqUri(int req);
-const char *getCracker(const char *mapFilePath);
+const char *getCracker(const char *mapFilePath, const char *algoId);
 void doCrack(const char *crackInfoPath, cJSON *taskInfo);
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream);
 int sendRequest(int reqType, cJSON *data);
@@ -179,7 +180,8 @@ void mkdirRecursive(char *path)
     free(fullpath);
 }
 
-int fileGetContents(char **contents, const char *path, const char *errorMessage)
+long int fileGetContents(char **contents, const char *path,
+    const char *errorMessage)
 {
     FILE *fileStream;
 
@@ -190,7 +192,7 @@ int fileGetContents(char **contents, const char *path, const char *errorMessage)
         return -1;
     }
 
-    long fileLength;
+    long int fileLength;
 
     fseek(fileStream, 0, SEEK_END);
     fileLength = ftell(fileStream);
@@ -199,7 +201,7 @@ int fileGetContents(char **contents, const char *path, const char *errorMessage)
     fread(*contents, 1, fileLength, fileStream);
     fclose(fileStream);
 
-    return 0;
+    return fileLength;
 }
 
 int fileCopy(const char *sourceFilePath, const char *targetFilePath)
@@ -289,14 +291,15 @@ cJSON *getJsonObject(cJSON *object, const char *option, int exitCode,
     jsonBuf = cJSON_GetObjectItem(object, option);
 
     if (!jsonBuf) {
-        if (errorMessage)
+        if (errorMessage) {
             fprintf(stderr, "%s\n", errorMessage);
-        fprintf(stderr, "'%s' %s\n", option, "not found in config file!");
+        }
 
-        if (exitCode > -1)
+        if (exitCode > -1) {
             exit(exitCode);
-        else
+        } else {
             return NULL;
+        }
     } else {
         return jsonBuf;
     }
@@ -310,7 +313,7 @@ cJSON *getJsonFile(void)
     strcat(filePath, CONFIG_PATH);
     strcat(filePath, CONFIG_FILE);
 
-    if (fileGetContents(&strBuf, filePath, "Config file not found!") != 0)
+    if (fileGetContents(&strBuf, filePath, "Config file not found!") < 0)
         exit(1);
 
     cJSON *jsonBuf;
@@ -412,7 +415,9 @@ void setPlatform(void)
     strcat(vendorPath, PATH_SEPARATOR);
     strcat(vendorPath, "cracker");
     strcat(vendorPath, PATH_SEPARATOR);
-    strcat(vendorPath, "hashcat_cpu");
+    strcat(vendorPath, "hashcat");
+    strcat(vendorPath, PATH_SEPARATOR);
+    strcat(vendorPath, platformId);
     strcat(vendorPath, PATH_SEPARATOR);
     strcat(vendorPath, "config.json");
     if (!fileExists(vendorPath)) {
@@ -422,11 +427,16 @@ void setPlatform(void)
         cJSON_AddItemToObject(vendorData, "vendor_type",
             cJSON_CreateString("cracker"));
         cJSON_AddItemToObject(vendorData, "name",
-            cJSON_CreateString("hashcat_cpu"));
+            cJSON_CreateString("hashcat"));
         cJSON_AddItemToObject(vendorData, "platform_id",
             cJSON_CreateString(platformId));
 
         reqGetVendor(vendorData);
+    }
+    if (!fileExists(vendorPath)) {
+        if (vendorData)
+            cJSON_Delete(vendorData);
+        exit(1);
     }
 
     // Check default vendor file
@@ -445,16 +455,18 @@ void setPlatform(void)
             cJSON_AddItemToObject(vendorData, "vendor_type",
                 cJSON_CreateString("cracker"));
             cJSON_AddItemToObject(vendorData, "name",
-                cJSON_CreateString("hashcat_cpu"));
+                cJSON_CreateString("hashcat"));
             cJSON_AddItemToObject(vendorData, "platform_id",
                 cJSON_CreateString(platformId));
         }
 
         reqGetVendor(vendorData);
     }
-
-    if (vendorData)
-        cJSON_Delete(vendorData);
+    if (!fileExists(vendorPath)) {
+        if (vendorData)
+            cJSON_Delete(vendorData);
+        exit(1);
+    }
 
     // Benchmark
     cJSON_AddItemToObject(jsonObj, "benchmark",
@@ -584,19 +596,39 @@ const char *getReqUri(int req)
     return "";
 }
 
-const char *getCracker(const char *mapFilePath)
+const char *getCracker(const char *mapFilePath, const char *algoId)
 {
     if (fileExists(mapFilePath)) {
         char *strBuf;
-        if (fileGetContents(&strBuf, mapFilePath, NULL) != 0)
-            return NULL;
+        if (fileGetContents(&strBuf, mapFilePath, NULL) < 0)
+            return "\0";
 
         cJSON *jsonBuf;
         jsonBuf = cJSON_Parse(strBuf);
         free(strBuf);
-    } else {
-        return NULL;
+
+        if (jsonBuf) {
+            cJSON *jsonMap = jsonBuf->child;
+            while (jsonMap) {
+                // TODO: Do not halt on algo_id or cracker miss
+                if (strncmp(algoId,
+                    getJsonObject(jsonMap, "algo_id", 1,
+                        "'algo_id' not found in algo-cracker file!")
+                        ->valuestring, strlen(algoId)) == 0) {
+                    return getJsonObject(jsonMap, "cracker", 1,
+                        "'cracker' not found in algo-cracker file!")
+                        ->valuestring;
+                }
+
+                jsonMap = jsonMap->next;
+            }
+        } else {
+            fprintf(stderr, "Invalid JSON in algo-cracker file: %s\n",
+                mapFilePath);
+        }
     }
+
+    return "\0";
 }
 
 /**
@@ -606,30 +638,117 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
 {
     char *strBuf;
 
-    if (fileGetContents(&strBuf, crackInfoPath, NULL) == 0) {
+    if (fileGetContents(&strBuf, crackInfoPath, NULL) > -1) {
         cJSON *crackInfo;
         crackInfo = cJSON_Parse(strBuf);
         free(strBuf);
 
+        // cJSON crackInfo {"id":"","gen_name":"","algo_id":"","algo_name":"","lenMin":"","lenMax":"","charset1":"","charset2":"","charset3":"","charset4":"","mask":""}
         if (crackInfo) {
-            char pathBuf[PATH_MAX + 1];
+            char pathBuf[PATH_MAX + 1], platformId[20];
+            strncpy(platformId,
+                getJsonObject(taskInfo, "platform", 1,
+                    "'platform' not found in response of get task!")
+                    ->valuestring, 19);
+            platformId[20] = '\0';
 
             /* Determine crakcer */
             strcpy(pathBuf, currentPath);
             strcat(pathBuf, CONFIG_PATH);
             strcat(pathBuf, ALGO_CRACKER_DIR);
             strcat(pathBuf, PATH_SEPARATOR);
-            strcat(pathBuf,
-                getJsonObject(taskInfo, "platform", 1,
-                    "'platform' not found in response of get task!")
-                    ->valuestring);
+            strcat(pathBuf, platformId);
             strcat(pathBuf, ".force");
 
-//            if (!getCracker(pathBuf)) {
-//
-//            }
-//            pathBuf[strlen(pathBuf) - 6] = '\0'; // Remove .force
+            char crackerName[PATH_MAX + 1];
+            crackerName[0] = '\0';
 
+            /* Check user defined algo-cracker */
+            strcpy(crackerName,
+                getCracker(pathBuf,
+                    getJsonObject(crackInfo, "algo_id", 1,
+                        "'algo_id' not found in crack info file!")->valuestring));
+
+            /* Check default algo-cracker */
+            if (strlen(crackerName) < 1) { // Cracker not determined
+                pathBuf[strlen(pathBuf) - 6] = '\0'; // Remove .force
+                strcpy(crackerName,
+                    getCracker(pathBuf,
+                        getJsonObject(crackInfo, "algo_id", 1,
+                            "'algo_id' not found in crack info file!")
+                            ->valuestring));
+            }
+
+            /* No cracker name found, use default cracker (hashcat) */
+            if (strlen(crackerName) < 1) { // Cracker not determined
+                if (strncmp("cpu", platformId, 3)) // Default cpu cracker
+                    strcpy(crackerName, "hashcat");
+                else if (strncmp("gpu", platformId, 3)) // Default cpu cracker
+                    strcpy(crackerName, "hashcat");
+            }
+
+            if (strlen(crackerName) > 0) { // Cracker determined
+                // Check vendor info
+                strcpy(pathBuf, currentPath);
+                strcat(pathBuf, "vendor");
+                strcat(pathBuf, PATH_SEPARATOR);
+                strcat(pathBuf, "cracker");
+                strcat(pathBuf, PATH_SEPARATOR);
+                strcat(pathBuf, crackerName);
+                strcat(pathBuf, PATH_SEPARATOR);
+                strcat(pathBuf, platformId);
+                strcat(pathBuf, PATH_SEPARATOR);
+                strcat(pathBuf, "config.json");
+
+                cJSON *vendorData;
+                if (!fileExists(pathBuf)) {
+                    vendorData = cJSON_CreateObject();
+                    cJSON_AddItemToObject(vendorData, "object_type",
+                        cJSON_CreateString("info"));
+                    cJSON_AddItemToObject(vendorData, "vendor_type",
+                        cJSON_CreateString("cracker"));
+                    cJSON_AddItemToObject(vendorData, "name",
+                        cJSON_CreateString(crackerName));
+                    cJSON_AddItemToObject(vendorData, "platform_id",
+                        cJSON_CreateString(platformId));
+
+                    reqGetVendor(vendorData);
+                }
+
+                // Check vendor file
+                strcpy(pathBuf, getDirName(pathBuf));
+                strcat(pathBuf, PATH_SEPARATOR);
+                strcat(pathBuf, platformId);
+                if (!fileExists(pathBuf)) {
+                    if (vendorData) {
+                        strcpy(
+                            getJsonObject(vendorData, "object_type", -1, NULL)
+                                ->valuestring, "file");
+                    } else {
+                        vendorData = cJSON_CreateObject();
+                        cJSON_AddItemToObject(vendorData, "object_type",
+                            cJSON_CreateString("file"));
+                        cJSON_AddItemToObject(vendorData, "vendor_type",
+                            cJSON_CreateString("cracker"));
+                        cJSON_AddItemToObject(vendorData, "name",
+                            cJSON_CreateString(crackerName));
+                        cJSON_AddItemToObject(vendorData, "platform_id",
+                            cJSON_CreateString(platformId));
+                    }
+
+                    reqGetVendor(vendorData);
+                }
+
+                if (vendorData)
+                    cJSON_Delete(vendorData);
+
+            } else { // Cracker not determined
+                fprintf(stderr,
+                    "Can't find a cracker to do the crack. crack_id: %s, platform: %s\n",
+                    getJsonObject(taskInfo, "crack_id", 1,
+                        "'crack_id' not found in response of get task!")
+                        ->valuestring, platformId);
+            }
         } else {
             fprintf(stderr, "Invalid JSON in crack info file: %s\n",
                 crackInfoPath);
@@ -774,6 +893,24 @@ void reqGetVendor(cJSON *vendorData)
 
 void resGetVendor(const char *resBodyPath, cJSON *reqData)
 {
+    char *strBuf;
+    long int resSize;
+
+    resSize = fileGetContents(&strBuf, resBodyPath,
+        "Can't open response file of vendor!");
+    if (resSize < 0) {
+        return;
+    } else {
+        if (strncmp(strBuf, "0", resSize) == 0) {
+            fprintf(stderr,
+                "Vendor not found in server. object_type: %s, vendor_type: %s, name: %s\n",
+                getJsonObject(reqData, "object_type", -1, NULL)->valuestring,
+                getJsonObject(reqData, "vendor_type", -1, NULL)->valuestring,
+                getJsonObject(reqData, "name", -1, NULL)->valuestring);
+            return;
+        }
+    }
+
     char vendorResPath[PATH_MAX + 1];
 
     strcpy(vendorResPath, currentPath);
@@ -784,6 +921,9 @@ void resGetVendor(const char *resBodyPath, cJSON *reqData)
     strcat(vendorResPath, PATH_SEPARATOR);
     strcat(vendorResPath,
         getJsonObject(reqData, "name", -1, NULL)->valuestring);
+    strcat(vendorResPath, PATH_SEPARATOR);
+    strcat(vendorResPath,
+        getJsonObject(reqData, "platform_id", -1, NULL)->valuestring);
     strcat(vendorResPath, PATH_SEPARATOR);
 
     if (strcmp(getJsonObject(reqData, "object_type", -1, NULL)->valuestring,
@@ -824,7 +964,7 @@ void resGetTask(const char *resBodyPath)
     char *strBuf;
 
     if (fileGetContents(&strBuf, resBodyPath,
-        "Error in reading response file of get task!") == 0) {
+        "Error in reading response file of get task!") > -1) {
         cJSON *jsonTasks;
         jsonTasks = cJSON_Parse(strBuf);
         free(strBuf);
