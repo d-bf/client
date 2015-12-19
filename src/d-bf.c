@@ -763,15 +763,15 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                     reqGetVendor(cracker);
                 }
 
-                // Execute crack
+                // Prepare crack for execution
                 if (fileGetContents(&strBuf, pathBuf,
                     "Crack info file not valid!") > 0) {
                     cracker = cJSON_Parse(strBuf);
-                    cJSON *crackerArgJson;
                     cJSON *jsonBuf = getJsonObject(cracker, "config", -1,
                         "'config' not found in cracker info!");
 
                     if (jsonBuf) {
+                        cJSON *crackerArgJson;
                         jsonBuf = getJsonObject(jsonBuf, "args_opt", -1,
                             "'args_opt' not found in cracker info!");
 
@@ -833,7 +833,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                             char4[0] = '\0';
                         }
 
-                        char crackerArgs[1024];
+                        char crackerArgs[PATH_MAX + 1];
                         jsonBuf = getJsonObject(cracker, "config", -1,
                             "'config' not found in cracker info!");
                         crackerArgJson = getJsonObject(jsonBuf, "args", -1,
@@ -894,7 +894,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                             strReplace(crackerArgs, "LEN_MAX",
                                 crackerArgJson->valuestring));
 
-                        // Replace LEN_MAX
+                        // Replace MASK
                         crackerArgJson = getJsonObject(crackInfo, "mask", -1,
                             "'mask' not found in crack info!");
                         if (!crackerArgJson)
@@ -902,6 +902,29 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         strcpy(crackerArgs,
                             strReplace(crackerArgs, "MASK",
                                 crackerArgJson->valuestring));
+
+                        // Create hashfile
+                        crackerArgJson = getJsonObject(crackInfo, "target", -1,
+                            "'target' not found in crack info!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(pathBuf, crackInfoPath);
+                        strcpy(pathBuf, getDirName(pathBuf));
+                        strcat(pathBuf, PATH_SEPARATOR);
+                        strcat(pathBuf, "hashfile");
+                        FILE *hashFile;
+                        hashFile = fopen(pathBuf, "wb");
+                        if (!hashFile) {
+                            fprintf(stderr, "%s\n",
+                                "Can not create hash file!");
+                            return;
+                        }
+                        fputs(crackerArgJson->valuestring, hashFile);
+                        fclose(hashFile);
+
+                        // Replace HASH_FILE
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "HASH_FILE", pathBuf));
 
                         // Replace START
                         crackerArgJson = getJsonObject(taskInfo, "start", -1,
@@ -921,10 +944,14 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                             strReplace(crackerArgs, "OFFSET",
                                 crackerArgJson->valuestring));
 
+                        // Execute crack
                         printf(crackerArgs);
-                        // TODO: Delete json objects
+
+                        cJSON_Delete(crackerArgJson);
                     }
+                    cJSON_Delete(jsonBuf);
                 }
+                cJSON_Delete(cracker);
             } else { // Cracker not determined
                 fprintf(stderr,
                     "Can't find a cracker to do the crack. crack_id: %s, platform: %s\n",
@@ -932,6 +959,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         "'crack_id' not found in response of get task!")
                         ->valuestring, platformId);
             }
+            cJSON_Delete(crackInfo);
         } else {
             fprintf(stderr, "Invalid JSON in crack info file: %s\n",
                 crackInfoPath);
