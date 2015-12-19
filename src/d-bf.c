@@ -76,6 +76,7 @@ int sslVerify;
 
 /* Functions forward declaration */
 
+char *strReplace(char *str, char *find, char *rep);
 char *getDirName(char *path);
 int dirExists(const char *path);
 int fileExists(const char *path);
@@ -139,6 +140,29 @@ int main(int argc, char **argv)
 }
 
 /* Functions definition */
+
+char *strReplace(char *str, char *find, char *rep)
+{
+    static char strReplaced[4096];
+    static char strToReplace[4096];
+    char *p;
+
+    strncpy(strToReplace, str, 4095);
+    strToReplace[4096] = '\0';
+    strncpy(strReplaced, strToReplace, 4096);
+
+    while ((p = strstr(strToReplace, find))) {
+        strncpy(strReplaced, strToReplace, p - strToReplace); // Copy characters from 'str' start to 'orig' start
+        strReplaced[p - strToReplace] = '\0';
+
+        sprintf(strReplaced + (p - strToReplace), "%s%s", rep,
+            p + strlen(find));
+
+        strncpy(strToReplace, strReplaced, 4096);
+    }
+
+    return strReplaced;
+}
 
 char *getDirName(char *path)
 {
@@ -688,7 +712,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
             }
 
             if (strlen(crackerName) > 0) { // Cracker determined
-                // Check vendor info
+                // Check vendor file
                 strcpy(pathBuf, currentPath);
                 strcat(pathBuf, "vendor");
                 strcat(pathBuf, PATH_SEPARATOR);
@@ -698,50 +722,209 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                 strcat(pathBuf, PATH_SEPARATOR);
                 strcat(pathBuf, platformId);
                 strcat(pathBuf, PATH_SEPARATOR);
-                strcat(pathBuf, "config.json");
+                strcat(pathBuf, platformId);
 
-                cJSON *vendorData;
+                cJSON *cracker;
                 if (!fileExists(pathBuf)) {
-                    vendorData = cJSON_CreateObject();
-                    cJSON_AddItemToObject(vendorData, "object_type",
-                        cJSON_CreateString("info"));
-                    cJSON_AddItemToObject(vendorData, "vendor_type",
+                    cracker = cJSON_CreateObject();
+                    cJSON_AddItemToObject(cracker, "object_type",
+                        cJSON_CreateString("file"));
+                    cJSON_AddItemToObject(cracker, "vendor_type",
                         cJSON_CreateString("cracker"));
-                    cJSON_AddItemToObject(vendorData, "name",
+                    cJSON_AddItemToObject(cracker, "name",
                         cJSON_CreateString(crackerName));
-                    cJSON_AddItemToObject(vendorData, "platform_id",
+                    cJSON_AddItemToObject(cracker, "platform_id",
                         cJSON_CreateString(platformId));
 
-                    reqGetVendor(vendorData);
+                    reqGetVendor(cracker);
                 }
 
-                // Check vendor file
+                // Check vendor info
                 strcpy(pathBuf, getDirName(pathBuf));
                 strcat(pathBuf, PATH_SEPARATOR);
-                strcat(pathBuf, platformId);
+                strcat(pathBuf, "config.json");
                 if (!fileExists(pathBuf)) {
-                    if (vendorData) {
+                    if (cracker) {
                         strcpy(
-                            getJsonObject(vendorData, "object_type", -1, NULL)
-                                ->valuestring, "file");
+                            getJsonObject(cracker, "object_type", -1, NULL)
+                                ->valuestring, "info");
                     } else {
-                        vendorData = cJSON_CreateObject();
-                        cJSON_AddItemToObject(vendorData, "object_type",
-                            cJSON_CreateString("file"));
-                        cJSON_AddItemToObject(vendorData, "vendor_type",
+                        cracker = cJSON_CreateObject();
+                        cJSON_AddItemToObject(cracker, "object_type",
+                            cJSON_CreateString("info"));
+                        cJSON_AddItemToObject(cracker, "vendor_type",
                             cJSON_CreateString("cracker"));
-                        cJSON_AddItemToObject(vendorData, "name",
+                        cJSON_AddItemToObject(cracker, "name",
                             cJSON_CreateString(crackerName));
-                        cJSON_AddItemToObject(vendorData, "platform_id",
+                        cJSON_AddItemToObject(cracker, "platform_id",
                             cJSON_CreateString(platformId));
                     }
 
-                    reqGetVendor(vendorData);
+                    reqGetVendor(cracker);
                 }
 
-                if (vendorData)
-                    cJSON_Delete(vendorData);
+                // Execute crack
+                if (fileGetContents(&strBuf, pathBuf,
+                    "Crack info file not valid!") > 0) {
+                    cracker = cJSON_Parse(strBuf);
+                    cJSON *crackerArgJson;
+                    cJSON *jsonBuf = getJsonObject(cracker, "config", -1,
+                        "'config' not found in cracker info!");
 
+                    if (jsonBuf) {
+                        jsonBuf = getJsonObject(jsonBuf, "args_opt", -1,
+                            "'args_opt' not found in cracker info!");
+
+                        char char1[255], char2[255], char3[255], char4[255];
+
+                        crackerArgJson = getJsonObject(jsonBuf, "CHAR1", -1,
+                        NULL);
+                        if (crackerArgJson) {
+                            strcpy(char1, crackerArgJson->valuestring);
+
+                            crackerArgJson = getJsonObject(crackInfo,
+                                "charset1", -1, NULL);
+                            strcpy(char1,
+                                strReplace(char1, "CHAR1",
+                                    crackerArgJson->valuestring));
+                        } else {
+                            char1[0] = '\0';
+                        }
+
+                        crackerArgJson = getJsonObject(jsonBuf, "CHAR2", -1,
+                        NULL);
+                        if (crackerArgJson) {
+                            strcpy(char2, crackerArgJson->valuestring);
+
+                            crackerArgJson = getJsonObject(crackInfo,
+                                "charset2", -1, NULL);
+                            strcpy(char2,
+                                strReplace(char2, "CHAR2",
+                                    crackerArgJson->valuestring));
+                        } else {
+                            char2[0] = '\0';
+                        }
+
+                        crackerArgJson = getJsonObject(jsonBuf, "CHAR3", -1,
+                        NULL);
+                        if (crackerArgJson) {
+                            strcpy(char3, crackerArgJson->valuestring);
+
+                            crackerArgJson = getJsonObject(crackInfo,
+                                "charset3", -1, NULL);
+                            strcpy(char3,
+                                strReplace(char3, "CHAR3",
+                                    crackerArgJson->valuestring));
+                        } else {
+                            char3[0] = '\0';
+                        }
+
+                        crackerArgJson = getJsonObject(jsonBuf, "CHAR4", -1,
+                        NULL);
+                        if (crackerArgJson) {
+                            strcpy(char4, crackerArgJson->valuestring);
+
+                            crackerArgJson = getJsonObject(crackInfo,
+                                "charset4", -1, NULL);
+                            strcpy(char4,
+                                strReplace(char4, "CHAR4",
+                                    crackerArgJson->valuestring));
+                        } else {
+                            char4[0] = '\0';
+                        }
+
+                        char crackerArgs[1024];
+                        jsonBuf = getJsonObject(cracker, "config", -1,
+                            "'config' not found in cracker info!");
+                        crackerArgJson = getJsonObject(jsonBuf, "args", -1,
+                            "'args' not found in cracker info!");
+                        if (crackerArgJson) {
+                            strcpy(crackerArgs, crackerArgJson->valuestring);
+                        }
+
+                        // Replace CHAR1
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "CHAR1", char1));
+
+                        // Replace CHAR2
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "CHAR2", char2));
+
+                        // Replace CHAR3
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "CHAR3", char3));
+
+                        // Replace CHAR4
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "CHAR4", char4));
+
+                        // Replace ALGO_ID
+                        crackerArgJson = getJsonObject(crackInfo, "algo_id", -1,
+                            "'algo_id' not found in crack info file!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "ALGO_ID",
+                                crackerArgJson->valuestring));
+
+                        // Replace ALGO_NAME
+                        crackerArgJson = getJsonObject(crackInfo, "algo_name",
+                            -1, "'algo_name' not found in crack info!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "ALGO_NAME",
+                                crackerArgJson->valuestring));
+
+                        // Replace LEN_MIN
+                        crackerArgJson = getJsonObject(crackInfo, "lenMin", -1,
+                            "'lenMin' not found in crack info!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "LEN_MIN",
+                                crackerArgJson->valuestring));
+
+                        // Replace LEN_MAX
+                        crackerArgJson = getJsonObject(crackInfo, "lenMax", -1,
+                            "'lenMax' not found in crack info!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "LEN_MAX",
+                                crackerArgJson->valuestring));
+
+                        // Replace LEN_MAX
+                        crackerArgJson = getJsonObject(crackInfo, "mask", -1,
+                            "'mask' not found in crack info!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "MASK",
+                                crackerArgJson->valuestring));
+
+                        // Replace START
+                        crackerArgJson = getJsonObject(taskInfo, "start", -1,
+                            "'start' not found in response of get task!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "START",
+                                crackerArgJson->valuestring));
+
+                        // Replace OFFSET
+                        crackerArgJson = getJsonObject(taskInfo, "offset", -1,
+                            "'offset' not found in response of get task!");
+                        if (!crackerArgJson)
+                            return;
+                        strcpy(crackerArgs,
+                            strReplace(crackerArgs, "OFFSET",
+                                crackerArgJson->valuestring));
+
+                        printf(crackerArgs);
+                        // TODO: Delete json objects
+                    }
+                }
             } else { // Cracker not determined
                 fprintf(stderr,
                     "Can't find a cracker to do the crack. crack_id: %s, platform: %s\n",
