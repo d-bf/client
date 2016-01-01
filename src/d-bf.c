@@ -97,7 +97,7 @@ void setUrlApiVer(void);
 void chkServerDependentConfigs(void);
 const char *getReqUri(int req);
 const char *getCracker(const char *mapFilePath, const char *algoId);
-void doCrack(const char *crackInfoPath, cJSON *taskInfo);
+int doCrack(const char *crackInfoPath, cJSON *taskInfo);
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream);
 int sendRequest(int reqType, cJSON *data);
 void reqGetAlgoCracker(cJSON *reqData);
@@ -108,7 +108,7 @@ void reqUpdateVendor(void);
 void resUpdateVendor(const char *resBodyPath);
 void reqGetTask(void);
 void resGetTask(const char *resBodyPath);
-void reqSendResult(void);
+void reqSendResult(cJSON *jsonResults);
 void resSendResult(const char *resBodyPath);
 void reqGetCrackInfo(const char *crackId);
 void resGetCrackInfo(const char *resBodyPath, cJSON *reqData);
@@ -224,6 +224,8 @@ long int fileGetContents(char **contents, const char *path,
     *contents = (char *) malloc(fileLength + 1);
     fread(*contents, 1, fileLength, fileStream);
     fclose(fileStream);
+
+    *(*contents + fileLength) = '\0';
 
     return fileLength;
 }
@@ -658,9 +660,10 @@ const char *getCracker(const char *mapFilePath, const char *algoId)
 /**
  * cJSON taskInfo {"crack_id":"", "start":"", "offset":"", "platform":""}
  */
-void doCrack(const char *crackInfoPath, cJSON *taskInfo)
+int doCrack(const char *crackInfoPath, cJSON *taskInfo)
 {
     char *strBuf;
+    int ret = 1;
 
     if (fileGetContents(&strBuf, crackInfoPath, NULL) > -1) {
         cJSON *crackInfo;
@@ -675,6 +678,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                     "'platform' not found in response of get task!")
                     ->valuestring, 19);
             platformId[20] = '\0';
+            cJSON_DeleteItemFromObject(taskInfo, "platform"); // Delete platform, preparing taskInfo to send back to server
 
             /* Determine crakcer */
             strcpy(pathBuf, currentPath);
@@ -771,6 +775,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                 if (fileGetContents(&strBuf, pathBuf,
                     "Crack info file not valid!") > 0) {
                     cracker = cJSON_Parse(strBuf);
+                    free(strBuf);
                     cJSON *jsonBuf = getJsonObject(cracker, "config", -1,
                         "'config' not found in cracker info!");
 
@@ -886,7 +891,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         crackerArgJson = getJsonObject(crackInfo, "algo_id", -1,
                             "'algo_id' not found in crack info file!");
                         if (!crackerArgJson)
-                            return;
+                            return ret;
                         strcpy(crackerCmd,
                             strReplace(crackerCmd, "ALGO_ID",
                                 crackerArgJson->valuestring));
@@ -895,7 +900,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         crackerArgJson = getJsonObject(crackInfo, "algo_name",
                             -1, "'algo_name' not found in crack info!");
                         if (!crackerArgJson)
-                            return;
+                            return ret;
                         strcpy(crackerCmd,
                             strReplace(crackerCmd, "ALGO_NAME",
                                 crackerArgJson->valuestring));
@@ -904,7 +909,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         crackerArgJson = getJsonObject(crackInfo, "lenMin", -1,
                             "'lenMin' not found in crack info!");
                         if (!crackerArgJson)
-                            return;
+                            return ret;
                         strcpy(crackerCmd,
                             strReplace(crackerCmd, "LEN_MIN",
                                 crackerArgJson->valuestring));
@@ -913,7 +918,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         crackerArgJson = getJsonObject(crackInfo, "lenMax", -1,
                             "'lenMax' not found in crack info!");
                         if (!crackerArgJson)
-                            return;
+                            return ret;
                         strcpy(crackerCmd,
                             strReplace(crackerCmd, "LEN_MAX",
                                 crackerArgJson->valuestring));
@@ -922,16 +927,34 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         crackerArgJson = getJsonObject(crackInfo, "mask", -1,
                             "'mask' not found in crack info!");
                         if (!crackerArgJson)
-                            return;
+                            return ret;
                         strcpy(crackerCmd,
                             strReplace(crackerCmd, "MASK",
+                                crackerArgJson->valuestring));
+
+                        // Replace START
+                        crackerArgJson = getJsonObject(taskInfo, "start", -1,
+                            "'start' not found in response of get task!");
+                        if (!crackerArgJson)
+                            return ret;
+                        strcpy(crackerCmd,
+                            strReplace(crackerCmd, "START",
+                                crackerArgJson->valuestring));
+
+                        // Replace OFFSET
+                        crackerArgJson = getJsonObject(taskInfo, "offset", -1,
+                            "'offset' not found in response of get task!");
+                        if (!crackerArgJson)
+                            return ret;
+                        strcpy(crackerCmd,
+                            strReplace(crackerCmd, "OFFSET",
                                 crackerArgJson->valuestring));
 
                         // Create hashfile
                         crackerArgJson = getJsonObject(crackInfo, "target", -1,
                             "'target' not found in crack info!");
                         if (!crackerArgJson)
-                            return;
+                            return ret;
                         strcpy(pathBuf, crackInfoPath);
                         strcpy(pathBuf, getDirName(pathBuf));
                         strcat(pathBuf, PATH_SEPARATOR);
@@ -941,7 +964,7 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         if (!hashFile) {
                             fprintf(stderr, "%s\n",
                                 "Can not create hash file!");
-                            return;
+                            return ret;
                         }
                         fputs(crackerArgJson->valuestring, hashFile);
                         fclose(hashFile);
@@ -955,28 +978,14 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
                         strcpy(crackerCmd,
                             strReplace(crackerCmd, "OUT_FILE", pathBuf));
 
-                        // Replace START
-                        crackerArgJson = getJsonObject(taskInfo, "start", -1,
-                            "'start' not found in response of get task!");
-                        if (!crackerArgJson)
-                            return;
-                        strcpy(crackerCmd,
-                            strReplace(crackerCmd, "START",
-                                crackerArgJson->valuestring));
-
-                        // Replace OFFSET
-                        crackerArgJson = getJsonObject(taskInfo, "offset", -1,
-                            "'offset' not found in response of get task!");
-                        if (!crackerArgJson)
-                            return;
-                        strcpy(crackerCmd,
-                            strReplace(crackerCmd, "OFFSET",
-                                crackerArgJson->valuestring));
-
                         /* Execute crack */
                         system(crackerCmd);
 
-                        puts("Execution finished");
+                        if (fileGetContents(&strBuf, pathBuf, NULL) > 0) { // Out file is not empty, so send it to server
+                            cJSON_AddStringToObject(taskInfo, "result", strBuf);
+                            free(strBuf);
+                        }
+                        ret = 0;
 
                         /* Execution finished */
                         cJSON_Delete(crackerArgJson);
@@ -998,6 +1007,8 @@ void doCrack(const char *crackInfoPath, cJSON *taskInfo)
     } else {
         fprintf(stderr, "Can't open crack info file: %s\n", crackInfoPath);
     }
+
+    return ret;
 }
 
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream)
@@ -1207,12 +1218,12 @@ void resGetTask(const char *resBodyPath)
 
     if (fileGetContents(&strBuf, resBodyPath,
         "Error in reading response file of get task!") > -1) {
-        cJSON *jsonTasks;
-        jsonTasks = cJSON_Parse(strBuf);
+        cJSON *jsonTasks = cJSON_Parse(strBuf);
         free(strBuf);
 
         if (jsonTasks) {
-            cJSON *jsonTask = jsonTasks->child;
+            cJSON *jsonTask = jsonTasks->child, *jsonResults =
+                cJSON_CreateArray();
             char crackInfoPath[PATH_MAX + 1];
             while (jsonTask) {
                 // {"crack_id":"","start":"","offset":"","platform":""}
@@ -1235,10 +1246,15 @@ void resGetTask(const char *resBodyPath)
                             ->valuestring);
                 }
 
-                doCrack(crackInfoPath, jsonTask);
+                if (doCrack(crackInfoPath, jsonTask) == 0) {
+                    cJSON_AddItemReferenceToArray(jsonResults, jsonTask);
+                }
 
                 jsonTask = jsonTask->next;
             }
+
+            reqSendResult(jsonResults);
+
             cJSON_Delete(jsonTasks);
         } else {
             fprintf(stderr, "%s\n", "Invalid JSON response file for get task!");
@@ -1246,8 +1262,9 @@ void resGetTask(const char *resBodyPath)
     }
 }
 
-void reqSendResult(void)
+void reqSendResult(cJSON *jsonResults)
 {
+    sendRequest(REQ_SEND_RESULT, jsonResults);
 }
 
 void resSendResult(const char *resBodyPath)
