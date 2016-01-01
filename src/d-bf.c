@@ -544,8 +544,10 @@ cJSON *getPlatform(void)
     cJSON *jsonBuf;
 
     jsonBuf = getJsonFile();
-    jsonBuf = getJsonObject(jsonBuf, "platform", 1,
+    jsonBuf = getJsonObject(jsonBuf, "platform", -1,
         "'platform' not found in config file!");
+    if (!jsonBuf)
+        exit(1);
     return jsonBuf;
 }
 
@@ -555,12 +557,15 @@ void setUrlApiVer(void)
     char strBuf[MAX_URL_LEN];
 
     jsonBuf = getJsonFile();
-    jsonBuf = getJsonObject(jsonBuf, "server", 1,
+    jsonBuf = getJsonObject(jsonBuf, "server", -1,
         "'server' not found in config file!");
+    if (!jsonBuf)
+        exit(1);
 
-    strcpy(strBuf,
-        getJsonObject(jsonBuf, "url_api", 1,
-            "'url_api' not found in config file!")->valuestring);
+    jsonBufTemp = getJsonObject(jsonBuf, "url_api", -1, "'url_api' not found in config file!");
+    if (!jsonBufTemp)
+        exit(1);
+    strcpy(strBuf, jsonBufTemp->valuestring);
 
     // TODO: Validate url
     if (strlen(strBuf) < 1) {
@@ -569,16 +574,19 @@ void setUrlApiVer(void)
     }
 
     strcat(strBuf, "/");
-    strcat(strBuf,
-        getJsonObject(jsonBuf, "version", 1,
-            "'version' not found in config file!")->valuestring);
+    jsonBufTemp = getJsonObject(jsonBuf, "version", -1, "'version' not found in config file!");
+    if (!jsonBufTemp)
+        exit(1);
+    strcat(strBuf, jsonBufTemp->valuestring);
     strcat(strBuf, "/");
 
     urlApiVer = (char *) malloc(strlen(strBuf) + 1);
     strcpy(urlApiVer, strBuf);
 
-    sslVerify = getJsonObject(jsonBuf, "ssl_verify", 1,
-        "'ssl_verify' not found in config file!")->valueint;
+    jsonBufTemp = getJsonObject(jsonBuf, "ssl_verify", -1, "'ssl_verify' not found in config file!");
+    if (!jsonBufTemp)
+        exit(1);
+    sslVerify = jsonBufTemp->valueint;
 
     cJSON_Delete(jsonBuf);
 }
@@ -598,9 +606,10 @@ void chkServerDependentConfigs(void)
         jsonBuf = jsonBuf->child;
         while (jsonBuf) {
             // TODO: Do not halt on paltform id miss
-            cJSON_AddItemReferenceToArray(reqData,
-                getJsonObject(jsonBuf, "id", 1,
-                    "'id' not found in 'platform' in config file!"));
+            jsonBufTemp = getJsonObject(jsonBuf, "id", -1, "'id' not found in 'platform' in config file!");
+            if (!jsonBufTemp)
+                exit(1);
+            cJSON_AddItemReferenceToArray(reqData, jsonBufTemp);
             jsonBuf = jsonBuf->next;
         }
         reqGetAlgoCracker(reqData);
@@ -640,13 +649,14 @@ const char *getCracker(const char *mapFilePath, const char *algoId)
             cJSON *jsonMap = jsonBuf->child;
             while (jsonMap) {
                 // TODO: Do not halt on algo_id or cracker miss
-                if (strncmp(algoId,
-                    getJsonObject(jsonMap, "algo_id", 1,
-                        "'algo_id' not found in algo-cracker file!")
-                        ->valuestring, strlen(algoId)) == 0) {
-                    return getJsonObject(jsonMap, "cracker", 1,
-                        "'cracker' not found in algo-cracker file!")
-                        ->valuestring;
+                jsonBufTemp = getJsonObject(jsonMap, "algo_id", -1, "'algo_id' not found in algo-cracker file!");
+                if (!jsonBufTemp)
+                    exit(1);
+                if (strncmp(algoId, jsonBufTemp->valuestring, strlen(algoId)) == 0) {
+                    jsonBufTemp = getJsonObject(jsonMap, "cracker", -1, "'cracker' not found in algo-cracker file!");
+                    if (!jsonBufTemp)
+                        exit(1);
+                    return jsonBufTemp->valuestring;
                 }
 
                 jsonMap = jsonMap->next;
@@ -676,12 +686,12 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
         // cJSON crackInfo {"id":"","gen_name":"","algo_id":"","algo_name":"","lenMin":"","lenMax":"","charset1":"","charset2":"","charset3":"","charset4":"","mask":""}
         if (crackInfo) {
             int once;
-            for (once = 0; once < 1; once++) { // Add an one loop for to utilize break!
+            do { // An once loop to utilize break!
                 char pathBuf[PATH_MAX + 1], platformId[20];
-                strncpy(platformId,
-                    getJsonObject(*taskInfo, "platform", 1,
-                        "'platform' not found in response of get task!")
-                        ->valuestring, 19);
+                jsonBufTemp = getJsonObject(*taskInfo, "platform", -1, "'platform' not found in response of get task!");
+                if (!jsonBufTemp)
+                    exit(1);
+                strncpy(platformId, jsonBufTemp->valuestring, 19);
                 platformId[20] = '\0';
                 cJSON_DeleteItemFromObject(*taskInfo, "platform"); // Delete platform, preparing taskInfo to send back to server
 
@@ -697,20 +707,18 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                 crackerName[0] = '\0';
 
                 /* Check user defined algo-cracker */
-                strcpy(crackerName,
-                    getCracker(pathBuf,
-                        getJsonObject(crackInfo, "algo_id", 1,
-                            "'algo_id' not found in crack info file!")
-                            ->valuestring));
+                jsonBufTemp = getJsonObject(crackInfo, "algo_id", -1, "'algo_id' not found in crack info file!");
+                if (!jsonBufTemp)
+                    exit(1);
+                strcpy(crackerName, getCracker(pathBuf, jsonBufTemp->valuestring));
 
                 /* Check default algo-cracker */
                 if (strlen(crackerName) < 1) { // Cracker not determined
                     pathBuf[strlen(pathBuf) - 6] = '\0'; // Remove .force
-                    strcpy(crackerName,
-                        getCracker(pathBuf,
-                            getJsonObject(crackInfo, "algo_id", 1,
-                                "'algo_id' not found in crack info file!")
-                                ->valuestring));
+                    jsonBufTemp = getJsonObject(crackInfo, "algo_id", -1, "'algo_id' not found in crack info file!");
+                    if (!jsonBufTemp)
+                        exit(1);
+                    strcpy(crackerName, getCracker(pathBuf, jsonBufTemp->valuestring));
                 }
 
                 /* No cracker name found, use default cracker (hashcat) */
@@ -997,13 +1005,13 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                     }
                     cJSON_Delete(cracker);
                 } else { // Cracker not determined
-                    fprintf(stderr,
-                        "Can't find a cracker to do the crack. crack_id: %s, platform: %s\n",
-                        getJsonObject(*taskInfo, "crack_id", 1,
-                            "'crack_id' not found in response of get task1!")
-                            ->valuestring, platformId);
+                    jsonBufTemp = getJsonObject(*taskInfo, "crack_id", -1, "'crack_id' not found in response of get task1!");
+                    if (jsonBufTemp)
+                        fprintf(stderr, "Can't find a cracker to do the crack. crack_id: %s, platform: %s\n", jsonBufTemp->valuestring, platformId);
+                    else
+                        fprintf(stderr, "Can't find a cracker to do the crack. crack_id: ?, platform: %s\n", platformId);
                 }
-            } // End of once for loop
+            } while (0); // End of once loop
 
             cJSON_Delete(crackInfo);
         } else {
@@ -1237,19 +1245,19 @@ void resGetTask(const char *resBodyPath)
                 strcat(crackInfoPath, "crack");
                 strcat(crackInfoPath, PATH_SEPARATOR);
                 // TODO: Do not halt on crack_id miss
-                strcat(crackInfoPath,
-                    getJsonObject(jsonTask, "crack_id", 1,
-                        "'crack_id' not found in response of get task2!")
-                        ->valuestring);
+                jsonBufTemp = getJsonObject(jsonTask, "crack_id", -1, "'crack_id' not found in response of get task2!");
+                if (!jsonBufTemp)
+                    exit(1);
+                strcat(crackInfoPath, jsonBufTemp->valuestring);
                 strcat(crackInfoPath, PATH_SEPARATOR);
                 strcat(crackInfoPath, "info.json");
 
                 if (!fileExists(crackInfoPath)) { // Get crack info if needed
                     // TODO: Do not halt on crack_id miss
-                    reqGetCrackInfo(
-                        getJsonObject(jsonTask, "crack_id", 1,
-                            "'crack_id' not found in response of get task3!")
-                            ->valuestring);
+                    jsonBufTemp = getJsonObject(jsonTask, "crack_id", -1, "'crack_id' not found in response of get task3!");
+                    if (!jsonBufTemp)
+                        exit(1);
+                    reqGetCrackInfo(jsonBufTemp->valuestring);
                 }
 
                 if (doCrack(crackInfoPath, &jsonTask) == 0) {
