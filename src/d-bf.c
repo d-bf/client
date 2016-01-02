@@ -646,7 +646,7 @@ const char *getCracker(const char *mapFilePath, const char *algoId)
 int doCrack(const char *crackInfoPath, cJSON **taskInfo)
 {
     char *strBuf;
-    int ret = 1;
+    int ret = -2;
 
     if (fileGetContents(&strBuf, crackInfoPath, NULL) > -1) {
         cJSON *crackInfo;
@@ -919,7 +919,7 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                             }
 
                             /* Execute crack */
-                            ret = system(crackerCmd); // Return: -1: not executed; 0: executed successfully; >0: executed with error;
+                            ret = system(crackerCmd); // Return: <0: not executed successfully; 0: executed successfully; >0: executed with error;
 
                             if (fileGetContents(&strBuf, pathBuf, NULL) > 0) { // Out file is not empty, so send it to server
                                 cJSON_AddStringToObject(*taskInfo, "result", strBuf);
@@ -1167,10 +1167,9 @@ void resGetTask(const char *resBodyPath)
                     }
 
                     if (fileExists(crackInfoPath)) {
-                        // TODO: Send errors to server
-                        if (doCrack(crackInfoPath, &jsonTask) == 0) {
-                            cJSON_AddItemReferenceToArray(jsonResults, jsonTask);
-                        }
+                        cJSON_AddNumberToObject(jsonTask, "status", doCrack(crackInfoPath, &jsonTask));
+
+                        cJSON_AddItemReferenceToArray(jsonResults, jsonTask);
                     } else {
                         fprintf(stderr, "Crack info is not available: %s\n", crackInfoPath);
                     }
