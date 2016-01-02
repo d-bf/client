@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 
     // Global libcurl initialization
     if (curl_global_init(CURL_GLOBAL_ALL) != 0) {
-        fprintf(stderr, "%s\n", "Error in initializing curl!");
+        fprintf(stderr, "Error in initializing curl!\n");
         return 1; // Exit
     }
 
@@ -234,7 +234,7 @@ int fileCopy(const char *sourceFilePath, const char *targetFilePath)
 
     sourceStream = fopen(sourceFilePath, "rb");
     if (!sourceStream) {
-        fprintf(stderr, "%s%s\n", "Can't read file: ", sourceFilePath);
+        fprintf(stderr, "Can't read file: %s\n", sourceFilePath);
     }
 
     char *targetDirName = strdup(targetFilePath);
@@ -243,7 +243,7 @@ int fileCopy(const char *sourceFilePath, const char *targetFilePath)
     targetStream = fopen(targetFilePath, "wb");
     if (!targetStream) {
         fclose(sourceStream);
-        fprintf(stderr, "%s%s\n", "Can't write file: ", targetFilePath);
+        fprintf(stderr, "Can't write file: %s\n", targetFilePath);
     }
 
     int ch;
@@ -282,7 +282,7 @@ void chkConfigs(void)
         FILE *configFile;
         configFile = fopen(configFilePath, "wb");
         if (!configFile) {
-            fprintf(stderr, "%s\n", "Can not create config file!");
+            fprintf(stderr, "Can not create config file!\n");
             exit(1);
         }
 
@@ -337,7 +337,7 @@ cJSON *getJsonFile(void)
     free(strBuf);
 
     if (!jsonBuf) {
-        fprintf(stderr, "%s\n", "Invalid JSON config file!");
+        fprintf(stderr, "Invalid JSON config file!\n");
         exit(1);
     }
 
@@ -387,7 +387,7 @@ long long int getBenchCpu(const char *vendorPath)
     strcpy(cmdBench, vendorPath);
     strcat(cmdBench, " -b -m0");
     if (!(benchStream = popen(cmdBench, "r"))) {
-        fprintf(stderr, "%s%s\n", "Can't get benchmark: ", cmdBench);
+        fprintf(stderr, "Can't get benchmark: %s\n", cmdBench);
         exit(1);
     }
     while (fgets(benchStr, sizeof(benchStr) - 1, benchStream) != NULL) {
@@ -500,7 +500,7 @@ void setPlatform(void)
     configFile = fopen(strBuf, "wb");
     free(strBuf);
     if (!configFile) {
-        fprintf(stderr, "%s\n", "Config file not found!");
+        fprintf(stderr, "Config file not found!\n");
         exit(1);
     }
     strBuf = cJSON_Print(jsonBuf);
@@ -557,9 +557,10 @@ void setUrlApiVer(void)
     strcpy(urlApiVer, strBuf);
 
     jsonBufTemp = getJsonObject(jsonBuf, "ssl_verify", "'ssl_verify' not found in config file!");
-    if (!jsonBufTemp)
-        exit(1);
-    sslVerify = jsonBufTemp->valueint;
+    if (jsonBufTemp)
+        sslVerify = jsonBufTemp->valueint;
+    else
+        sslVerify = 0;
 
     cJSON_Delete(jsonBuf);
 }
@@ -578,11 +579,10 @@ void chkServerDependentConfigs(void)
         cJSON *jsonBuf = getPlatform(), *reqData = cJSON_CreateArray();
         jsonBuf = jsonBuf->child;
         while (jsonBuf) {
-            // TODO: Do not halt on paltform id miss
             jsonBufTemp = getJsonObject(jsonBuf, "id", "'id' not found in 'platform' in config file!");
-            if (!jsonBufTemp)
-                exit(1);
-            cJSON_AddItemReferenceToArray(reqData, jsonBufTemp);
+            if (jsonBufTemp)
+                cJSON_AddItemReferenceToArray(reqData, jsonBufTemp);
+
             jsonBuf = jsonBuf->next;
         }
         reqGetAlgoCracker(reqData);
@@ -621,15 +621,13 @@ const char *getCracker(const char *mapFilePath, const char *algoId)
         if (jsonBuf) {
             cJSON *jsonMap = jsonBuf->child;
             while (jsonMap) {
-                // TODO: Do not halt on algo_id or cracker miss
                 jsonBufTemp = getJsonObject(jsonMap, "algo_id", "'algo_id' not found in algo-cracker file!");
-                if (!jsonBufTemp)
-                    exit(1);
-                if (strncmp(algoId, jsonBufTemp->valuestring, strlen(algoId)) == 0) {
-                    jsonBufTemp = getJsonObject(jsonMap, "cracker", "'cracker' not found in algo-cracker file!");
-                    if (!jsonBufTemp)
-                        exit(1);
-                    return jsonBufTemp->valuestring;
+                if (jsonBufTemp) {
+                    if (strncmp(algoId, jsonBufTemp->valuestring, strlen(algoId)) == 0) {
+                        jsonBufTemp = getJsonObject(jsonMap, "cracker", "'cracker' not found in algo-cracker file!");
+                        if (jsonBufTemp)
+                            return jsonBufTemp->valuestring;
+                    }
                 }
 
                 jsonMap = jsonMap->next;
@@ -662,7 +660,7 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                 char pathBuf[PATH_MAX + 1], platformId[20];
                 jsonBufTemp = getJsonObject(*taskInfo, "platform", "'platform' not found in response of get task!");
                 if (!jsonBufTemp)
-                    exit(1);
+                    break;
                 strncpy(platformId, jsonBufTemp->valuestring, 19);
                 platformId[20] = '\0';
                 cJSON_DeleteItemFromObject(*taskInfo, "platform"); // Delete platform, preparing taskInfo to send back to server
@@ -681,7 +679,7 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                 /* Check user defined algo-cracker */
                 jsonBufTemp = getJsonObject(crackInfo, "algo_id", "'algo_id' not found in crack info file!");
                 if (!jsonBufTemp)
-                    exit(1);
+                    break;
                 strcpy(crackerName, getCracker(pathBuf, jsonBufTemp->valuestring));
 
                 /* Check default algo-cracker */
@@ -689,7 +687,7 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                     pathBuf[strlen(pathBuf) - 6] = '\0'; // Remove .force
                     jsonBufTemp = getJsonObject(crackInfo, "algo_id", "'algo_id' not found in crack info file!");
                     if (!jsonBufTemp)
-                        exit(1);
+                        break;
                     strcpy(crackerName, getCracker(pathBuf, jsonBufTemp->valuestring));
                 }
 
@@ -754,131 +752,78 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                         cJSON *jsonBuf = getJsonObject(cracker, "config", "'config' not found in cracker info!");
 
                         if (jsonBuf) {
-                            jsonBuf = getJsonObject(jsonBuf, "args_opt", "'args_opt' not found in cracker info!");
-
                             char char1[255], char2[255], char3[255], char4[255];
 
-                            // Prepare CHAR1
-                            jsonBufTemp = getJsonObject(jsonBuf, "CHAR1", NULL);
-                            if (jsonBufTemp) {
-                                strcpy(char1, jsonBufTemp->valuestring);
+                            jsonBuf = getJsonObject(jsonBuf, "args_opt", "'args_opt' not found in cracker info!");
 
-                                jsonBufTemp = getJsonObject(crackInfo, "charset1", NULL);
-                                if (strlen(jsonBufTemp->valuestring) > 0) {
-                                    strcpy(char1, strReplace(char1, "CHAR1", jsonBufTemp->valuestring));
+                            if (jsonBuf) {
+                                // Prepare CHAR1
+                                jsonBufTemp = getJsonObject(jsonBuf, "CHAR1", NULL);
+                                if (jsonBufTemp) {
+                                    strcpy(char1, jsonBufTemp->valuestring);
+
+                                    jsonBufTemp = getJsonObject(crackInfo, "charset1", NULL);
+                                    if (jsonBufTemp && strlen(jsonBufTemp->valuestring) > 0) {
+                                        strcpy(char1, strReplace(char1, "CHAR1", jsonBufTemp->valuestring));
+                                    } else {
+                                        char1[0] = '\0';
+                                    }
                                 } else {
                                     char1[0] = '\0';
                                 }
-                            } else {
-                                char1[0] = '\0';
-                            }
 
-                            // Prepare CHAR2
-                            jsonBufTemp = getJsonObject(jsonBuf, "CHAR2", NULL);
-                            if (jsonBufTemp) {
-                                strcpy(char2, jsonBufTemp->valuestring);
+                                // Prepare CHAR2
+                                jsonBufTemp = getJsonObject(jsonBuf, "CHAR2", NULL);
+                                if (jsonBufTemp) {
+                                    strcpy(char2, jsonBufTemp->valuestring);
 
-                                jsonBufTemp = getJsonObject(crackInfo, "charset2", NULL);
-                                if (strlen(jsonBufTemp->valuestring) > 0) {
-                                    strcpy(char2, strReplace(char2, "CHAR2", jsonBufTemp->valuestring));
+                                    jsonBufTemp = getJsonObject(crackInfo, "charset2", NULL);
+                                    if (jsonBufTemp && strlen(jsonBufTemp->valuestring) > 0) {
+                                        strcpy(char2, strReplace(char2, "CHAR2", jsonBufTemp->valuestring));
+                                    } else {
+                                        char2[0] = '\0';
+                                    }
                                 } else {
                                     char2[0] = '\0';
                                 }
-                            } else {
-                                char2[0] = '\0';
-                            }
 
-                            // Prepare CHAR3
-                            jsonBufTemp = getJsonObject(jsonBuf, "CHAR3", NULL);
-                            if (jsonBufTemp) {
-                                strcpy(char3, jsonBufTemp->valuestring);
+                                // Prepare CHAR3
+                                jsonBufTemp = getJsonObject(jsonBuf, "CHAR3", NULL);
+                                if (jsonBufTemp) {
+                                    strcpy(char3, jsonBufTemp->valuestring);
 
-                                jsonBufTemp = getJsonObject(crackInfo, "charset3", NULL);
-                                if (strlen(jsonBufTemp->valuestring) > 0) {
-                                    strcpy(char3, strReplace(char3, "CHAR3", jsonBufTemp->valuestring));
+                                    jsonBufTemp = getJsonObject(crackInfo, "charset3", NULL);
+                                    if (jsonBufTemp && strlen(jsonBufTemp->valuestring) > 0) {
+                                        strcpy(char3, strReplace(char3, "CHAR3", jsonBufTemp->valuestring));
+                                    } else {
+                                        char3[0] = '\0';
+                                    }
                                 } else {
                                     char3[0] = '\0';
                                 }
-                            } else {
-                                char3[0] = '\0';
-                            }
 
-                            // Prepare CHAR4
-                            jsonBufTemp = getJsonObject(jsonBuf, "CHAR4", NULL);
-                            if (jsonBufTemp) {
-                                strcpy(char4, jsonBufTemp->valuestring);
+                                // Prepare CHAR4
+                                jsonBufTemp = getJsonObject(jsonBuf, "CHAR4", NULL);
+                                if (jsonBufTemp) {
+                                    strcpy(char4, jsonBufTemp->valuestring);
 
-                                jsonBufTemp = getJsonObject(crackInfo, "charset4", NULL);
-                                if (strlen(jsonBufTemp->valuestring) > 0) {
-                                    strcpy(char4, strReplace(char4, "CHAR4", jsonBufTemp->valuestring));
+                                    jsonBufTemp = getJsonObject(crackInfo, "charset4", NULL);
+                                    if (jsonBufTemp && strlen(jsonBufTemp->valuestring) > 0) {
+                                        strcpy(char4, strReplace(char4, "CHAR4", jsonBufTemp->valuestring));
+                                    } else {
+                                        char4[0] = '\0';
+                                    }
                                 } else {
                                     char4[0] = '\0';
                                 }
                             } else {
+                                char1[0] = '\0';
+                                char2[0] = '\0';
+                                char3[0] = '\0';
                                 char4[0] = '\0';
                             }
 
                             /* Prepare cracker command */
-                            jsonBuf = getJsonObject(cracker, "config", "'config' not found in cracker info!");
-                            jsonBufTemp = getJsonObject(jsonBuf, "args", "'args' not found in cracker info!");
-                            if (jsonBufTemp) {
-                                strcat(crackerCmd, jsonBufTemp->valuestring);
-                            }
-
-                            // Replace CHAR1
-                            strcpy(crackerCmd, strReplace(crackerCmd, "CHAR1", char1));
-
-                            // Replace CHAR2
-                            strcpy(crackerCmd, strReplace(crackerCmd, "CHAR2", char2));
-
-                            // Replace CHAR3
-                            strcpy(crackerCmd, strReplace(crackerCmd, "CHAR3", char3));
-
-                            // Replace CHAR4
-                            strcpy(crackerCmd, strReplace(crackerCmd, "CHAR4", char4));
-
-                            // Replace ALGO_ID
-                            jsonBufTemp = getJsonObject(crackInfo, "algo_id", "'algo_id' not found in crack info file!");
-                            if (!jsonBufTemp)
-                                break;
-                            strcpy(crackerCmd, strReplace(crackerCmd, "ALGO_ID", jsonBufTemp->valuestring));
-
-                            // Replace ALGO_NAME
-                            jsonBufTemp = getJsonObject(crackInfo, "algo_name", "'algo_name' not found in crack info!");
-                            if (!jsonBufTemp)
-                                break;
-                            strcpy(crackerCmd, strReplace(crackerCmd, "ALGO_NAME", jsonBufTemp->valuestring));
-
-                            // Replace LEN_MIN
-                            jsonBufTemp = getJsonObject(crackInfo, "lenMin", "'lenMin' not found in crack info!");
-                            if (!jsonBufTemp)
-                                break;
-                            strcpy(crackerCmd, strReplace(crackerCmd, "LEN_MIN", jsonBufTemp->valuestring));
-
-                            // Replace LEN_MAX
-                            jsonBufTemp = getJsonObject(crackInfo, "lenMax", "'lenMax' not found in crack info!");
-                            if (!jsonBufTemp)
-                                break;
-                            strcpy(crackerCmd, strReplace(crackerCmd, "LEN_MAX", jsonBufTemp->valuestring));
-
-                            // Replace MASK
-                            jsonBufTemp = getJsonObject(crackInfo, "mask", "'mask' not found in crack info!");
-                            if (!jsonBufTemp)
-                                break;
-                            strcpy(crackerCmd, strReplace(crackerCmd, "MASK", jsonBufTemp->valuestring));
-
-                            // Replace START
-                            jsonBufTemp = getJsonObject(*taskInfo, "start", "'start' not found in response of get task!");
-                            if (!jsonBufTemp)
-                                break;
-                            strcpy(crackerCmd, strReplace(crackerCmd, "START", jsonBufTemp->valuestring));
-
-                            // Replace OFFSET
-                            jsonBufTemp = getJsonObject(*taskInfo, "offset", "'offset' not found in response of get task!");
-                            if (!jsonBufTemp)
-                                break;
-                            strcpy(crackerCmd, strReplace(crackerCmd, "OFFSET", jsonBufTemp->valuestring));
-
                             // Create hashfile
                             jsonBufTemp = getJsonObject(crackInfo, "target", "'target' not found in crack info!");
                             if (!jsonBufTemp)
@@ -890,18 +835,89 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                             FILE *hashFile;
                             hashFile = fopen(pathBuf, "wb");
                             if (!hashFile) {
-                                fprintf(stderr, "%s\n", "Can not create hash file!");
+                                fprintf(stderr, "Can not create hash file!\n");
                                 break;
                             }
                             fputs(jsonBufTemp->valuestring, hashFile);
                             fclose(hashFile);
 
-                            // Replace HASH_FILE
-                            strcpy(crackerCmd, strReplace(crackerCmd, "HASH_FILE", pathBuf));
+                            jsonBufTemp = getJsonObject(cracker, "config", "'config' not found in cracker info!");
+                            if (jsonBufTemp) {
+                                jsonBufTemp = getJsonObject(jsonBuf, "args", "'args' not found in cracker info!");
+                                if (jsonBufTemp) {
+                                    strcat(crackerCmd, jsonBufTemp->valuestring);
 
-                            // Replace OUT_FILE
-                            strcat(pathBuf, ".out");
-                            strcpy(crackerCmd, strReplace(crackerCmd, "OUT_FILE", pathBuf));
+                                    /* Replace args with their value */
+
+                                    // Replace START
+                                    jsonBufTemp = getJsonObject(*taskInfo, "start", "'start' not found in response of get task!");
+                                    if (!jsonBufTemp)
+                                        break;
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "START", jsonBufTemp->valuestring));
+
+                                    // Replace OFFSET
+                                    jsonBufTemp = getJsonObject(*taskInfo, "offset", "'offset' not found in response of get task!");
+                                    if (!jsonBufTemp)
+                                        break;
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "OFFSET", jsonBufTemp->valuestring));
+
+                                    int algoFlag = 0;
+
+                                    // Replace ALGO_ID
+                                    jsonBufTemp = getJsonObject(crackInfo, "algo_id", "'algo_id' not found in crack info file!");
+                                    if (jsonBufTemp) {
+                                        strcpy(crackerCmd, strReplace(crackerCmd, "ALGO_ID", jsonBufTemp->valuestring));
+                                        algoFlag = 1;
+                                    }
+
+                                    // Replace ALGO_NAME
+                                    jsonBufTemp = getJsonObject(crackInfo, "algo_name", "'algo_name' not found in crack info!");
+                                    if (jsonBufTemp) {
+                                        strcpy(crackerCmd, strReplace(crackerCmd, "ALGO_NAME", jsonBufTemp->valuestring));
+                                        algoFlag = 1;
+                                    }
+
+                                    if (algoFlag == 0)
+                                        break;
+
+                                    // Replace LEN_MIN
+                                    jsonBufTemp = getJsonObject(crackInfo, "lenMin", "'lenMin' not found in crack info!");
+                                    if (!jsonBufTemp)
+                                        break;
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "LEN_MIN", jsonBufTemp->valuestring));
+
+                                    // Replace LEN_MAX
+                                    jsonBufTemp = getJsonObject(crackInfo, "lenMax", "'lenMax' not found in crack info!");
+                                    if (!jsonBufTemp)
+                                        break;
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "LEN_MAX", jsonBufTemp->valuestring));
+
+                                    // Replace MASK
+                                    jsonBufTemp = getJsonObject(crackInfo, "mask", "'mask' not found in crack info!");
+                                    if (!jsonBufTemp)
+                                        break;
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "MASK", jsonBufTemp->valuestring));
+
+                                    // Replace CHAR1
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "CHAR1", char1));
+
+                                    // Replace CHAR2
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "CHAR2", char2));
+
+                                    // Replace CHAR3
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "CHAR3", char3));
+
+                                    // Replace CHAR4
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "CHAR4", char4));
+
+                                    // Replace HASH_FILE
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "HASH_FILE", pathBuf));
+
+                                    // Replace OUT_FILE
+                                    strcat(pathBuf, ".out");
+                                    strcpy(crackerCmd, strReplace(crackerCmd, "OUT_FILE", pathBuf));
+                                }
+                            }
 
                             /* Execute crack */
                             system(crackerCmd);
@@ -988,7 +1004,7 @@ int sendRequest(int reqType, cJSON *data)
         if (!resBodyFile) {
             curl_easy_cleanup(curl);
 
-            fprintf(stderr, "%s\n", "Can't write response body file!");
+            fprintf(stderr, "Can't write response body file!\n");
             return -1;
         }
 
@@ -1139,27 +1155,26 @@ void resGetTask(const char *resBodyPath)
             char crackInfoPath[PATH_MAX + 1];
             while (jsonTask) {
                 // {"crack_id":"","start":"","offset":"","platform":""}
-                strcpy(crackInfoPath, currentPath);
-                strcat(crackInfoPath, "crack");
-                strcat(crackInfoPath, PATH_SEPARATOR);
-                // TODO: Do not halt on crack_id miss
-                jsonBufTemp = getJsonObject(jsonTask, "crack_id", -1, "'crack_id' not found in response of get task!");
-                if (!jsonBufTemp)
-                    exit(1);
-                strcat(crackInfoPath, jsonBufTemp->valuestring);
-                strcat(crackInfoPath, PATH_SEPARATOR);
-                strcat(crackInfoPath, "info.json");
+                jsonBufTemp = getJsonObject(jsonTask, "crack_id", "'crack_id' not found in response of get task!");
+                if (jsonBufTemp) {
+                    strcpy(crackInfoPath, currentPath);
+                    strcat(crackInfoPath, "crack");
+                    strcat(crackInfoPath, PATH_SEPARATOR);
+                    strcat(crackInfoPath, jsonBufTemp->valuestring);
+                    strcat(crackInfoPath, PATH_SEPARATOR);
+                    strcat(crackInfoPath, "info.json");
 
-                if (!fileExists(crackInfoPath)) { // Get crack info if needed
-                    // TODO: Do not halt on crack_id miss
-                    jsonBufTemp = getJsonObject(jsonTask, "crack_id", "'crack_id' not found in response of get task!");
-                    if (!jsonBufTemp)
-                        exit(1);
-                    reqGetCrackInfo(jsonBufTemp->valuestring);
-                }
+                    if (!fileExists(crackInfoPath)) { // Get crack info if needed
+                        reqGetCrackInfo(jsonBufTemp->valuestring);
+                    }
 
-                if (doCrack(crackInfoPath, &jsonTask) == 0) {
-                    cJSON_AddItemReferenceToArray(jsonResults, jsonTask);
+                    if (fileExists(crackInfoPath)) {
+                        if (doCrack(crackInfoPath, &jsonTask) == 0) {
+                            cJSON_AddItemReferenceToArray(jsonResults, jsonTask);
+                        }
+                    } else {
+                        fprintf(stderr, "Crack info is not available: %s\n", crackInfoPath);
+                    }
                 }
 
                 jsonTask = jsonTask->next;
@@ -1170,7 +1185,7 @@ void resGetTask(const char *resBodyPath)
             cJSON_Delete(jsonResults);
             cJSON_Delete(jsonTasks);
         } else {
-            fprintf(stderr, "%s\n", "Invalid JSON response file for get task!");
+            fprintf(stderr, "Invalid JSON response file for get task!\n");
         }
     }
 }
@@ -1186,19 +1201,17 @@ void resSendResult(const char *resBodyPath, cJSON *reqData)
     char outFilePath[PATH_MAX + 1];
     cJSON *result = reqData->child;
     while (result) {
-        strcpy(outFilePath, currentPath);
-        strcat(outFilePath, "crack");
-        strcat(outFilePath, PATH_SEPARATOR);
         jsonBufTemp = getJsonObject(result, "crack_id", "'crack_id' not found in response of send result!");
-        if (!jsonBufTemp) {
-            result = result->next;
-            continue;
+        if (jsonBufTemp) {
+            strcpy(outFilePath, currentPath);
+            strcat(outFilePath, "crack");
+            strcat(outFilePath, PATH_SEPARATOR);
+            strcat(outFilePath, jsonBufTemp->valuestring);
+            strcat(outFilePath, PATH_SEPARATOR);
+            strcat(outFilePath, "hashfile.out");
+            if (fileExists(outFilePath))
+                unlink(outFilePath);
         }
-        strcat(outFilePath, jsonBufTemp->valuestring);
-        strcat(outFilePath, PATH_SEPARATOR);
-        strcat(outFilePath, "hashfile.out");
-        if (fileExists(outFilePath))
-            unlink(outFilePath);
 
         result = result->next;
     }
