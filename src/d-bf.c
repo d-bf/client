@@ -755,7 +755,6 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                             char char1[255], char2[255], char3[255], char4[255];
 
                             jsonBuf = getJsonObject(jsonBuf, "args_opt", "'args_opt' not found in cracker info!");
-
                             if (jsonBuf) {
                                 // Prepare CHAR1
                                 jsonBufTemp = getJsonObject(jsonBuf, "CHAR1", NULL);
@@ -843,7 +842,7 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
 
                             jsonBufTemp = getJsonObject(cracker, "config", "'config' not found in cracker info!");
                             if (jsonBufTemp) {
-                                jsonBufTemp = getJsonObject(jsonBuf, "args", "'args' not found in cracker info!");
+                                jsonBufTemp = getJsonObject(jsonBufTemp, "args", "'args' not found in cracker info!");
                                 if (jsonBufTemp) {
                                     strcat(crackerCmd, jsonBufTemp->valuestring);
 
@@ -920,13 +919,12 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
                             }
 
                             /* Execute crack */
-                            system(crackerCmd);
+                            ret = system(crackerCmd); // Return: -1: not executed; 0: executed successfully; >0: executed with error;
 
                             if (fileGetContents(&strBuf, pathBuf, NULL) > 0) { // Out file is not empty, so send it to server
                                 cJSON_AddStringToObject(*taskInfo, "result", strBuf);
                                 free(strBuf);
                             }
-                            ret = 0;
                             /* Execution finished */
                         }
                     }
@@ -1169,6 +1167,7 @@ void resGetTask(const char *resBodyPath)
                     }
 
                     if (fileExists(crackInfoPath)) {
+                        // TODO: Send errors to server
                         if (doCrack(crackInfoPath, &jsonTask) == 0) {
                             cJSON_AddItemReferenceToArray(jsonResults, jsonTask);
                         }
