@@ -65,8 +65,7 @@
 #define URI_SEND_RESULT "task/result"
 
 char CONFIG_PATH[8] = "config";
-const char CONFIG_FILE[] = "d-bf.json", ALGO_CRACKER_DIR[] = "algo-cracker", CUSTOM_ALGO_CRACKER_EXT[] = ".force", LOG_FILE[] = "d-bf.log", RES_BODY_FILE[] =
-    "res-body.tmp";
+const char CONFIG_FILE[] = "d-bf.json", ALGO_CRACKER_DIR[] = "algo-cracker", CUSTOM_ALGO_CRACKER_EXT[] = ".force", LOG_FILE[] = "d-bf.log", RES_BODY_FILE[] = "res-body.tmp";
 
 /* Global variables */
 
@@ -85,12 +84,13 @@ long int fileGetContents(char **contents, const char *path, const char *errorMes
 int fileCopy(const char *source, const char *target);
 void setCurrentPath(void);
 void chkConfigs(void);
+void syncPlatform(void);
 cJSON *getJsonObject(cJSON *object, const char *option, const char *errorMessage);
 cJSON *getJsonFile(void);
 double getBench(char *benchStr);
 long long int getBenchCpu(const char *vendorPath);
-void setPlatform(void);
-cJSON *getPlatform(void);
+void chkPlatform(void);
+cJSON *getPlatform(int active);
 void setUrlApiVer(void);
 void chkServerDependentConfigs(void);
 const char *getReqUri(int req);
@@ -278,7 +278,9 @@ void chkConfigs(void)
     strcat(configFilePath, PATH_SEPARATOR);
     strcat(configFilePath, CONFIG_FILE);
 
-    if (!fileExists(configFilePath)) {
+    if (fileExists(configFilePath)) {
+        syncPlatform();
+    } else {
         FILE *configFile;
         configFile = fopen(configFilePath, "wb");
         if (!configFile) {
@@ -286,22 +288,101 @@ void chkConfigs(void)
             exit(1);
         }
 
-        cJSON *jsonServer = cJSON_CreateObject(), *jsonBuf = cJSON_CreateObject();
+        cJSON *jsonConfig = cJSON_CreateObject(), *jsonBuf = cJSON_CreateObject();
         cJSON_AddItemToObject(jsonBuf, "url_api", cJSON_CreateString(""));
         cJSON_AddItemToObject(jsonBuf, "version", cJSON_CreateString("v1"));
         cJSON_AddItemToObject(jsonBuf, "ssl_verify", cJSON_CreateNumber(0));
-        cJSON_AddItemReferenceToObject(jsonServer, "server", jsonBuf);
+        cJSON_AddItemReferenceToObject(jsonConfig, "server", jsonBuf);
 
-        char *strBuf = cJSON_Print(jsonServer);
+        char *strBuf = cJSON_Print(jsonConfig);
         fputs(strBuf, configFile);
         fclose(configFile);
 
         free(strBuf);
-        cJSON_Delete(jsonServer);
+        cJSON_Delete(jsonConfig);
+
+        syncPlatform();
 
         fprintf(stdout, "Please enter server's URL in url_api in config file: %s\n", configFilePath);
         exit(1);
     }
+}
+
+void syncPlatform(void)
+{
+    // Check if platform option exists in config file
+    jsonBufTemp = getJsonFile();
+    jsonBufTemp = getJsonObject(jsonBufTemp, "platform", NULL);
+    if (jsonBufTemp) // platform option exists in config file
+        return;
+
+    // Check system type 32 or 64
+    if (sizeof(void *) == 8) {
+        strcat(archName, ARCH_NAME_64);
+    } else {
+        strcat(archName, ARCH_NAME_32);
+    }
+
+    char platformBase[9], platformId[20];
+
+    strcpy(platformBase, OS_NAME);
+    strcat(platformBase, "_");
+    strcat(platformBase, archName);
+
+    cJSON *jsonBuf, *jsonArr = cJSON_CreateArray();
+
+    // Add CPU
+    strcpy(platformId, "cpu_");
+    strcat(platformId, platformBase);
+    jsonBuf = cJSON_CreateObject();
+    cJSON_AddItemToObject(jsonBuf, "id", cJSON_CreateString(platformId));
+    cJSON_AddItemToObject(jsonBuf, "active", cJSON_CreateNumber(1));
+    cJSON_AddItemToObject(jsonBuf, "benchmark", cJSON_CreateNumber(0));
+    cJSON_AddItemReferenceToArray(jsonArr, jsonBuf);
+
+    // Add GPU AMD
+    strcpy(platformId, "gpu_");
+    strcat(platformId, platformBase);
+    strcat(platformId, "_amd");
+    jsonBuf = cJSON_CreateObject();
+    cJSON_AddItemToObject(jsonBuf, "id", cJSON_CreateString(platformId));
+    cJSON_AddItemToObject(jsonBuf, "active", cJSON_CreateNumber(0));
+    cJSON_AddItemToObject(jsonBuf, "benchmark", cJSON_CreateNumber(0));
+    cJSON_AddItemReferenceToArray(jsonArr, jsonBuf);
+
+    // Add GPU NVIDIA
+    strcpy(platformId, "gpu_");
+    strcat(platformId, platformBase);
+    strcat(platformId, "_nv");
+    jsonBuf = cJSON_CreateObject();
+    cJSON_AddItemToObject(jsonBuf, "id", cJSON_CreateString(platformId));
+    cJSON_AddItemToObject(jsonBuf, "active", cJSON_CreateNumber(0));
+    cJSON_AddItemToObject(jsonBuf, "benchmark", cJSON_CreateNumber(0));
+    cJSON_AddItemReferenceToArray(jsonArr, jsonBuf);
+
+    // Add platform to config file
+    jsonBufTemp = getJsonFile();
+    cJSON_AddItemToObject(jsonBufTemp, "platform", jsonArr);
+
+    // Save new config file
+    char *strBuf;
+    FILE *configFile;
+    strBuf = (char *) malloc(PATH_MAX + 1);
+    strcpy(strBuf, currentPath);
+    strcat(strBuf, CONFIG_PATH);
+    strcat(strBuf, CONFIG_FILE);
+    configFile = fopen(strBuf, "wb");
+    free(strBuf);
+    if (!configFile) {
+        fprintf(stderr, "Config file not found!\n");
+        exit(1);
+    }
+    strBuf = cJSON_Print(jsonBufTemp);
+    fputs(strBuf, configFile);
+    fclose(configFile);
+
+    free(strBuf);
+    cJSON_Delete(jsonBuf);
 }
 
 cJSON *getJsonObject(cJSON *object, const char *option, const char *errorMessage)
@@ -400,94 +481,88 @@ long long int getBenchCpu(const char *vendorPath)
     return llround(bench / 1);
 }
 
-void setPlatform(void)
+void chkPlatform(void)
 {
-    char platformBase[9], platformId[20];
-
-    // Check system type 32 or 64
-    if (sizeof(void *) == 8) {
-        strcat(archName, ARCH_NAME_64);
-    } else {
-        strcat(archName, ARCH_NAME_32);
-    }
-
-    strcpy(platformBase, OS_NAME);
-    strcat(platformBase, "_");
-    strcat(platformBase, archName);
-
-    cJSON *jsonObj, *jsonArr = cJSON_CreateArray(), *vendorData = NULL;
-    char vendorPath[PATH_MAX + 1];
-
-    // TODO: Add all platforms in loop
-    strcpy(platformId, "cpu_");
-    strcat(platformId, platformBase);
-    jsonObj = cJSON_CreateObject();
-    cJSON_AddItemToObject(jsonObj, "id", cJSON_CreateString(platformId));
-
-    // Check default vendor info
-    strcpy(vendorPath, currentPath);
-    strcat(vendorPath, "vendor");
-    strcat(vendorPath, PATH_SEPARATOR);
-    strcat(vendorPath, "cracker");
-    strcat(vendorPath, PATH_SEPARATOR);
-    strcat(vendorPath, "hashcat");
-    strcat(vendorPath, PATH_SEPARATOR);
-    strcat(vendorPath, platformId);
-    strcat(vendorPath, PATH_SEPARATOR);
-    strcat(vendorPath, "config.json");
-    if (!fileExists(vendorPath)) {
-        vendorData = cJSON_CreateObject();
-        cJSON_AddItemToObject(vendorData, "object_type", cJSON_CreateString("info"));
-        cJSON_AddItemToObject(vendorData, "vendor_type", cJSON_CreateString("cracker"));
-        cJSON_AddItemToObject(vendorData, "name", cJSON_CreateString("hashcat"));
-        cJSON_AddItemToObject(vendorData, "platform_id", cJSON_CreateString(platformId));
-
-        reqGetVendor(vendorData);
-    }
-    if (!fileExists(vendorPath)) {
-        if (vendorData)
-            cJSON_Delete(vendorData);
+    // Get platform from config file to update benchmarks
+    cJSON *jsonConfig = getJsonFile();
+    cJSON *jsonBuf = jsonConfig;
+    jsonBuf = getJsonObject(jsonBuf, "platform", "'platform' not found in config file!");
+    if (!jsonBuf)
         exit(1);
-    }
 
-    // Check default vendor file
-    strcpy(vendorPath, getDirName(vendorPath));
-    strcat(vendorPath, PATH_SEPARATOR);
-    strcat(vendorPath, platformId);
-    if (!fileExists(vendorPath)) {
-        if (vendorData) {
-            strcpy(getJsonObject(vendorData, "object_type", NULL)->valuestring, "file");
-        } else {
-            vendorData = cJSON_CreateObject();
-            cJSON_AddItemToObject(vendorData, "object_type", cJSON_CreateString("file"));
-            cJSON_AddItemToObject(vendorData, "vendor_type", cJSON_CreateString("cracker"));
-            cJSON_AddItemToObject(vendorData, "name", cJSON_CreateString("hashcat"));
-            cJSON_AddItemToObject(vendorData, "platform_id", cJSON_CreateString(platformId));
+    char vendorPath[PATH_MAX + 1];
+    cJSON *vendorData = NULL;
+
+    jsonBuf = jsonBuf->child;
+    while (jsonBuf) { // For each active platform
+        jsonBufTemp = getJsonObject(jsonBuf, "active", "'active' not found in 'platform' in config file!");
+        if (!jsonBufTemp || (jsonBufTemp->valueint == 0)) { // Is not active
+            jsonBuf = jsonBuf->next;
+
+            continue;
         }
 
-        reqGetVendor(vendorData);
-    }
-    if (!fileExists(vendorPath)) {
-        if (vendorData)
-            cJSON_Delete(vendorData);
-        exit(1);
-    }
+        jsonBufTemp = getJsonObject(jsonBuf, "id", "'id' not found in 'platform' in config file!");
+        if (jsonBufTemp) {
+            // Check default vendor info
+            strcpy(vendorPath, currentPath);
+            strcat(vendorPath, "vendor");
+            strcat(vendorPath, PATH_SEPARATOR);
+            strcat(vendorPath, "cracker");
+            strcat(vendorPath, PATH_SEPARATOR);
+            strcat(vendorPath, "hashcat");
+            strcat(vendorPath, PATH_SEPARATOR);
+            strcat(vendorPath, jsonBufTemp->valuestring); // Platform id
+            strcat(vendorPath, PATH_SEPARATOR);
+            strcat(vendorPath, "config.json");
+            if (!fileExists(vendorPath)) {
+                vendorData = cJSON_CreateObject();
+                cJSON_AddItemToObject(vendorData, "object_type", cJSON_CreateString("info"));
+                cJSON_AddItemToObject(vendorData, "vendor_type", cJSON_CreateString("cracker"));
+                cJSON_AddItemToObject(vendorData, "name", cJSON_CreateString("hashcat"));
+                cJSON_AddItemToObject(vendorData, "platform_id", cJSON_CreateString(jsonBufTemp->valuestring)); // Platform id
 
-    // Benchmark
-    cJSON_AddItemToObject(jsonObj, "benchmark", cJSON_CreateNumber(getBenchCpu(vendorPath)));
+                reqGetVendor(vendorData);
+            }
+            if (!fileExists(vendorPath)) {
+                if (vendorData)
+                    cJSON_Delete(vendorData);
+                exit(1);
+            }
 
-    cJSON_AddItemReferenceToArray(jsonArr, jsonObj);
+            // Check default vendor file
+            strcpy(vendorPath, getDirName(vendorPath));
+            strcat(vendorPath, PATH_SEPARATOR);
+            strcat(vendorPath, jsonBufTemp->valuestring); // Platform id
+            if (!fileExists(vendorPath)) {
+                if (vendorData) {
+                    strcpy(getJsonObject(vendorData, "object_type", NULL)->valuestring, "file");
+                } else {
+                    vendorData = cJSON_CreateObject();
+                    cJSON_AddItemToObject(vendorData, "object_type", cJSON_CreateString("file"));
+                    cJSON_AddItemToObject(vendorData, "vendor_type", cJSON_CreateString("cracker"));
+                    cJSON_AddItemToObject(vendorData, "name", cJSON_CreateString("hashcat"));
+                    cJSON_AddItemToObject(vendorData, "platform_id", cJSON_CreateString(jsonBufTemp->valuestring)); // Platform id
+                }
 
-    // Update platform in config file
-    cJSON *jsonBuf;
-    jsonBuf = getJsonFile();
-    jsonBuf = getJsonObject(jsonBuf, "platform", NULL);
-    if (jsonBuf) { // platform option exists in config file.
-        jsonBuf = getJsonFile();
-        cJSON_ReplaceItemInObject(jsonBuf, "platform", jsonArr);
-    } else { // platform option does not exist in config file, so create it.
-        jsonBuf = getJsonFile();
-        cJSON_AddItemToObject(jsonBuf, "platform", jsonArr);
+                reqGetVendor(vendorData);
+            }
+            if (!fileExists(vendorPath)) {
+                if (vendorData)
+                    cJSON_Delete(vendorData);
+                exit(1);
+            }
+
+            // Update benchmark
+            jsonBufTemp = getJsonObject(jsonBuf, "benchmark", NULL);
+            if (jsonBufTemp) { // benchmark option exists in platform in config file
+                cJSON_ReplaceItemInObject(jsonBuf, "benchmark", cJSON_CreateNumber(getBenchCpu(vendorPath)));
+            } else { // benchmark option does not exist in platform in config file
+                cJSON_AddItemToObject(jsonBuf, "benchmark", cJSON_CreateNumber(getBenchCpu(vendorPath)));
+            }
+        }
+
+        jsonBuf = jsonBuf->next;
     }
 
     // Save new config file
@@ -503,18 +578,15 @@ void setPlatform(void)
         fprintf(stderr, "Config file not found!\n");
         exit(1);
     }
-    strBuf = cJSON_Print(jsonBuf);
+    strBuf = cJSON_Print(jsonConfig);
     fputs(strBuf, configFile);
     fclose(configFile);
 
     free(strBuf);
     cJSON_Delete(jsonBuf);
-    jsonObj = NULL;
-    jsonArr = NULL;
-    jsonBuf = NULL;
 }
 
-cJSON *getPlatform(void)
+cJSON *getPlatform(int active)
 {
     cJSON *jsonBuf;
 
@@ -522,7 +594,24 @@ cJSON *getPlatform(void)
     jsonBuf = getJsonObject(jsonBuf, "platform", "'platform' not found in config file!");
     if (!jsonBuf)
         exit(1);
-    return jsonBuf;
+
+    cJSON *jsonBufArr = cJSON_CreateArray();
+
+    jsonBuf = jsonBuf->child;
+    while (jsonBuf) {
+        jsonBufTemp = getJsonObject(jsonBuf, "active", "'active' not found in 'platform' in config file!");
+        if (jsonBufTemp) {
+            cJSON_DeleteItemFromObject(jsonBuf, "active");
+            if ((active == 0) || (jsonBufTemp->valueint == 1)) // Return all or active platforms
+                cJSON_AddItemReferenceToArray(jsonBufArr, jsonBuf);
+        }
+
+        jsonBuf = jsonBuf->next;
+    }
+
+    cJSON_Delete(jsonBuf);
+
+    return jsonBufArr;
 }
 
 void setUrlApiVer(void)
@@ -535,7 +624,7 @@ void setUrlApiVer(void)
     if (!jsonBuf)
         exit(1);
 
-    jsonBufTemp = getJsonObject(jsonBuf, "url_api", "'url_api' not found in config file!");
+    jsonBufTemp = getJsonObject(jsonBuf, "url_api", "'url_api' not found in 'server' in config file!");
     if (!jsonBufTemp)
         exit(1);
     strcpy(strBuf, jsonBufTemp->valuestring);
@@ -547,7 +636,7 @@ void setUrlApiVer(void)
     }
 
     strcat(strBuf, "/");
-    jsonBufTemp = getJsonObject(jsonBuf, "version", "'version' not found in config file!");
+    jsonBufTemp = getJsonObject(jsonBuf, "version", "'version' not found in 'server' in config file!");
     if (!jsonBufTemp)
         exit(1);
     strcat(strBuf, jsonBufTemp->valuestring);
@@ -556,7 +645,7 @@ void setUrlApiVer(void)
     urlApiVer = (char *) malloc(strlen(strBuf) + 1);
     strcpy(urlApiVer, strBuf);
 
-    jsonBufTemp = getJsonObject(jsonBuf, "ssl_verify", "'ssl_verify' not found in config file!");
+    jsonBufTemp = getJsonObject(jsonBuf, "ssl_verify", "'ssl_verify' not found in 'server' in config file!");
     if (jsonBufTemp)
         sslVerify = jsonBufTemp->valueint;
     else
@@ -567,7 +656,7 @@ void setUrlApiVer(void)
 
 void chkServerDependentConfigs(void)
 {
-    setPlatform();
+    chkPlatform();
 
     char filePath[PATH_MAX + 1];
     strcpy(filePath, currentPath);
@@ -576,7 +665,7 @@ void chkServerDependentConfigs(void)
 
     if (!dirExists(filePath)) {
         mkdirRecursive(filePath);
-        cJSON *jsonBuf = getPlatform(), *reqData = cJSON_CreateArray();
+        cJSON *jsonBuf = getPlatform(0), *reqData = cJSON_CreateArray();
         jsonBuf = jsonBuf->child;
         while (jsonBuf) {
             jsonBufTemp = getJsonObject(jsonBuf, "id", "'id' not found in 'platform' in config file!");
@@ -586,6 +675,9 @@ void chkServerDependentConfigs(void)
             jsonBuf = jsonBuf->next;
         }
         reqGetAlgoCracker(reqData);
+
+        cJSON_Delete(jsonBuf);
+        cJSON_Delete(reqData);
     }
 }
 
@@ -1133,7 +1225,7 @@ void reqGetTask(void)
 {
     cJSON *jsonReqData = cJSON_CreateObject(), *jsonPlatform = cJSON_CreateObject();
 
-    cJSON_AddItemToObject(jsonPlatform, "platform", getPlatform());
+    cJSON_AddItemToObject(jsonPlatform, "platform", getPlatform(1));
     cJSON_AddItemToObject(jsonReqData, "client_info", jsonPlatform);
 
     sendRequest(REQ_GET_TASK, jsonReqData);
