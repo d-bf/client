@@ -527,6 +527,7 @@ void chkPlatform(void)
             if (!fileExists(vendorPath)) {
                 if (vendorData)
                     cJSON_Delete(vendorData);
+                fprintf(stderr, "Vendor info not gotten: %s\n", vendorPath);
                 exit(1);
             }
 
@@ -550,6 +551,7 @@ void chkPlatform(void)
             if (!fileExists(vendorPath)) {
                 if (vendorData)
                     cJSON_Delete(vendorData);
+                fprintf(stderr, "Vendor file not downloaded: %s\n", vendorPath);
                 exit(1);
             }
 
