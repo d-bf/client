@@ -75,6 +75,8 @@ cJSON *jsonBufTemp; // Used in doCrack()
 
 /* Functions forward declaration */
 
+void clearScreen(void);
+void sleepSec(int seconds);
 char *strReplace(char *str, char *find, char *rep);
 char *getDirName(char *path);
 int dirExists(const char *path);
@@ -115,6 +117,9 @@ void resGetCrackInfo(const char *resBodyPath, cJSON *reqData);
 
 int main(int argc, char **argv)
 {
+    clearScreen();
+    printf("Initializing the program, please wait...\n\n");
+
     /* Initialization */
     setCurrentPath();
     chkConfigs();
@@ -127,9 +132,25 @@ int main(int argc, char **argv)
         return 1; // Exit
     }
 
-    // TODO: Infinite loop
-    while (1) {
+    clearScreen();
+
+    int wait = 5; // Minimum time to wait between checks (in seconds)
+    double elapsed;
+    time_t startTime;
+    while (1) { // TODO: Infinite loop
+        startTime = time(NULL);
+
+        printf("Checking for new task...\n");
         reqGetTask();
+        printf("Done.\n\n");
+
+        elapsed = difftime(time(NULL), startTime);
+        if (elapsed < wait) {
+            printf("Perform next check after a moment...\n\n");
+            sleepSec((int) (wait - elapsed) + 1);
+        }
+
+        clearScreen();
     }
 
     // Destroy
@@ -140,6 +161,20 @@ int main(int argc, char **argv)
 }
 
 /* Functions definition */
+
+void clearScreen(void)
+{
+
+}
+
+void sleepSec(int seconds)
+{
+#if defined(OS_WIN)
+    sleep(seconds * 1000);
+#else
+    sleep(seconds);
+#endif
+}
 
 char *strReplace(char *str, char *find, char *rep)
 {
@@ -749,7 +784,6 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo)
 
         // cJSON crackInfo {"id":"","gen_name":"","algo_id":"","algo_name":"","lenMin":"","lenMax":"","charset1":"","charset2":"","charset3":"","charset4":"","mask":""}
         if (crackInfo) {
-            int once;
             do { // An once loop to utilize break!
                 char pathBuf[PATH_MAX + 1], platformId[20];
                 jsonBufTemp = getJsonObject(*taskInfo, "platform", "'platform' not found in response of get task!");
@@ -1185,9 +1219,8 @@ void resGetVendor(const char *resBodyPath, cJSON *reqData)
         return;
     } else {
         if (strncmp(strBuf, "0", resSize) == 0) {
-            fprintf(stderr, "Vendor not found in server. object_type: %s, vendor_type: %s, name: %s\n",
-                getJsonObject(reqData, "object_type", NULL)->valuestring, getJsonObject(reqData, "vendor_type", NULL)->valuestring,
-                getJsonObject(reqData, "name", NULL)->valuestring);
+            fprintf(stderr, "Vendor not found in server. object_type: %s, vendor_type: %s, name: %s\n", getJsonObject(reqData, "object_type", NULL)->valuestring,
+                getJsonObject(reqData, "vendor_type", NULL)->valuestring, getJsonObject(reqData, "name", NULL)->valuestring);
             return;
         }
     }
@@ -1245,6 +1278,7 @@ void resGetTask(const char *resBodyPath)
         if (jsonTasks) {
             cJSON *jsonTask = jsonTasks->child, *jsonResults = cJSON_CreateArray();
             char crackInfoPath[PATH_MAX + 1];
+            // TODO:Do cracks of each platform in parallel
             while (jsonTask) {
                 // {"crack_id":"","start":"","offset":"","platform":""}
                 jsonBufTemp = getJsonObject(jsonTask, "crack_id", "'crack_id' not found in response of get task!");
