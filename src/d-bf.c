@@ -118,7 +118,7 @@ void resGetCrackInfo(const char *resBodyPath, cJSON *reqData);
 int main(int argc, char **argv)
 {
     clearScreen();
-    printf("Initializing the program, please wait...\n\n");
+    printf("Initializing the program, please wait...\n");
 
     /* Initialization */
     setCurrentPath();
@@ -140,13 +140,13 @@ int main(int argc, char **argv)
     while (1) { // TODO: Infinite loop
         startTime = time(NULL);
 
-        printf("Checking for new task...\n");
+        printf("\nChecking for new task...\n");
         reqGetTask();
-        printf("Done.\n\n");
+        printf("Done.\n");
 
         elapsed = difftime(time(NULL), startTime);
         if (elapsed < wait) {
-            printf("Perform next check after a moment...\n\n");
+            printf("\nPerform next check after a moment...\n");
             sleepSec((int) (wait - elapsed) + 1);
         }
 
@@ -700,22 +700,22 @@ void chkServerDependentConfigs(void)
     strcat(filePath, CONFIG_PATH);
     strcat(filePath, ALGO_CRACKER_DIR);
 
-    if (!dirExists(filePath)) {
+    if (!dirExists(filePath))
         mkdirRecursive(filePath);
-        cJSON *jsonBuf = getPlatform(0), *reqData = cJSON_CreateArray();
-        jsonBuf = jsonBuf->child;
-        while (jsonBuf) {
-            jsonBufTemp = getJsonObject(jsonBuf, "id", "'id' not found in 'platform' in config file!");
-            if (jsonBufTemp)
-                cJSON_AddItemReferenceToArray(reqData, jsonBufTemp);
 
-            jsonBuf = jsonBuf->next;
-        }
-        reqGetAlgoCracker(reqData);
+    cJSON *jsonBuf = getPlatform(0), *reqData = cJSON_CreateArray();
+    jsonBuf = jsonBuf->child;
+    while (jsonBuf) {
+        jsonBufTemp = getJsonObject(jsonBuf, "id", "'id' not found in 'platform' in config file!");
+        if (jsonBufTemp)
+            cJSON_AddItemReferenceToArray(reqData, jsonBufTemp);
 
-        cJSON_Delete(jsonBuf);
-        cJSON_Delete(reqData);
+        jsonBuf = jsonBuf->next;
     }
+    reqGetAlgoCracker(reqData);
+
+    cJSON_Delete(jsonBuf);
+    cJSON_Delete(reqData);
 }
 
 const char *getReqUri(int req)
@@ -1185,22 +1185,51 @@ void reqGetAlgoCracker(cJSON *reqData)
 
 void resGetAlgoCracker(const char *resBodyPath, cJSON *reqData)
 {
-    char algoCrackerDirPath[PATH_MAX + 1], algoCrackerPath[PATH_MAX + 1];
-    cJSON *jsonPlat;
+    char *strBuf;
+    long int resSize;
 
-    strcpy(algoCrackerDirPath, currentPath);
-    strcat(algoCrackerDirPath, CONFIG_PATH);
-    strcat(algoCrackerDirPath, ALGO_CRACKER_DIR);
+    resSize = fileGetContents(&strBuf, resBodyPath, "Can't open response file of algo-cracker!");
+    if (resSize > 0) {
+        cJSON *jsonResponse = cJSON_Parse(strBuf);
+        free(strBuf);
 
-    jsonPlat = reqData->child;
-    while (jsonPlat) {
-        strcpy(algoCrackerPath, algoCrackerDirPath);
-        strcat(algoCrackerPath, PATH_SEPARATOR);
-        strcat(algoCrackerPath, jsonPlat->valuestring);
-        fileCopy(resBodyPath, algoCrackerPath);
-        chmod(algoCrackerPath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); // rwx rwx r-x (775)
+        if (!jsonResponse) {
+            fprintf(stderr, "Not a valid JSON response for algo-cracker!\n");
+            return;
+        }
 
-        jsonPlat = jsonPlat->next;
+        char algoCrackerDirPath[PATH_MAX + 1], algoCrackerPath[PATH_MAX + 1];
+
+        strcpy(algoCrackerDirPath, currentPath);
+        strcat(algoCrackerDirPath, CONFIG_PATH);
+        strcat(algoCrackerDirPath, ALGO_CRACKER_DIR);
+
+        FILE *algoCrackerFile;
+        cJSON *jsonPlat = reqData->child;
+        while (jsonPlat) {
+            jsonBufTemp = getJsonObject(jsonResponse, jsonPlat->valuestring, NULL);
+            if (jsonBufTemp) {
+                strcpy(algoCrackerPath, algoCrackerDirPath);
+                strcat(algoCrackerPath, PATH_SEPARATOR);
+                strcat(algoCrackerPath, jsonPlat->valuestring);
+
+                algoCrackerFile = fopen(algoCrackerPath, "wb");
+                if (algoCrackerFile) {
+                    fputs(cJSON_PrintUnformatted(jsonBufTemp), algoCrackerFile);
+                    fclose(algoCrackerFile);
+
+                    chmod(algoCrackerPath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); // rwx rwx r-x (775)
+                } else {
+                    fprintf(stderr, "Can not create/open algo-cracker file: %s\n", algoCrackerPath);
+                }
+            }
+
+            jsonPlat = jsonPlat->next;
+        }
+
+        cJSON_Delete(jsonResponse);
+    } else {
+        fprintf(stderr, "Not a valid response for algo-cracker!\n");
     }
 }
 
@@ -1221,8 +1250,12 @@ void resGetVendor(const char *resBodyPath, cJSON *reqData)
         if (strncmp(strBuf, "0", resSize) == 0) {
             fprintf(stderr, "Vendor not found in server. object_type: %s, vendor_type: %s, name: %s\n", getJsonObject(reqData, "object_type", NULL)->valuestring,
                 getJsonObject(reqData, "vendor_type", NULL)->valuestring, getJsonObject(reqData, "name", NULL)->valuestring);
+
+            free(strBuf);
+
             return;
         }
+        free(strBuf);
     }
 
     char vendorResPath[PATH_MAX + 1];
