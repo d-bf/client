@@ -143,13 +143,13 @@ int main(int argc, char **argv) {
 	while (1) { // TODO: Infinite loop
 		startTime = time(NULL);
 
-		printf("\nChecking for new task...\n");
+		printf("Checking for new task...\n");
 		reqGetTask();
-		printf("Done.\n");
+		printf("Done.\n\n");
 
 		elapsed = difftime(time(NULL), startTime);
 		if (elapsed < wait) {
-			printf("\nPerform next check after a moment...\n");
+			printf("Perform next check after a moment...\n");
 			sleepSec((int) (wait - elapsed) + 1);
 		}
 
@@ -166,7 +166,11 @@ int main(int argc, char **argv) {
 /* Functions definition */
 
 void clearScreen(void) {
-
+#if defined(OS_WIN)
+	system("cls");
+#else
+	system("clear");
+#endif
 }
 
 void sleepSec(int seconds) {
