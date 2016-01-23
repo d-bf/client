@@ -62,6 +62,9 @@
 #define REQ_SEND_RESULT 5
 #define URI_SEND_RESULT "task/result"
 
+#define VENDOR_GENERATOR "generator"
+#define VENDOR_CRACKER "cracker"
+
 char CONFIG_PATH[8] = "config";
 const char CONFIG_FILE[] = "d-bf.json", ALGO_CRACKER_DIR[] = "algo-cracker",
 		CUSTOM_ALGO_CRACKER_EXT[] = ".force", LOG_FILE[] = "d-bf.log",
@@ -97,8 +100,8 @@ void chkPlatform(void);
 cJSON *getPlatform(int active);
 void setUrlApiVer(void);
 void chkServerDependentConfigs(void);
+int chkVendor(const char *type, const char *name, const char *platform);
 const char *getReqUri(int req);
-const char *getCracker(const char *mapFilePath, const char *algoId);
 int doCrack(const char *crackInfoPath, cJSON **taskInfo);
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream);
 int sendRequest(int reqType, cJSON *data);
@@ -187,7 +190,7 @@ char *strReplace(char *str, char *find, char *rep) {
 	strncpy(strReplaced, strToReplace, 4096);
 
 	while ((p = strstr(strToReplace, find))) {
-		strncpy(strReplaced, strToReplace, p - strToReplace); // Copy characters from 'str' start to 'orig' start
+		strncpy(strReplaced, strToReplace, p - strToReplace); // Copy characters from 'str' start to 'find' start
 		strReplaced[p - strToReplace] = '\0';
 
 		sprintf(strReplaced + (p - strToReplace), "%s%s", rep,
@@ -518,9 +521,6 @@ void chkPlatform(void) {
 	if (!jsonBuf)
 		exit(1);
 
-	char vendorPath[PATH_MAX + 1];
-	cJSON *vendorData = NULL;
-
 	jsonBuf = jsonBuf->child;
 	while (jsonBuf) { // For each active platform
 		jsonBufTemp = getJsonObject(jsonBuf, "active",
@@ -535,36 +535,25 @@ void chkPlatform(void) {
 				"'id' not found in 'platform' in config file!");
 		if (jsonBufTemp) {
 			// Check default vendor file
-			strcpy(vendorPath, currentPath);
-			strcat(vendorPath, "vendor");
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, "cracker");
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, "hashcat");
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, jsonBufTemp->valuestring); // Platform id
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, jsonBufTemp->valuestring); // Platform id
-
-			if (!fileExists(vendorPath)) {
-				vendorData = cJSON_CreateObject();
-				cJSON_AddItemToObject(vendorData, "vendor_type",
-						cJSON_CreateString("cracker"));
-				cJSON_AddItemToObject(vendorData, "name",
-						cJSON_CreateString("hashcat"));
-				cJSON_AddItemToObject(vendorData, "platform_id",
-						cJSON_CreateString(jsonBufTemp->valuestring)); // Platform id
-
-				reqGetVendor(vendorData);
-			}
-			if (!fileExists(vendorPath)) {
-				if (vendorData)
-					cJSON_Delete(vendorData);
-				fprintf(stderr, "Vendor file not downloaded: %s\n", vendorPath);
+			if (chkVendor(VENDOR_CRACKER, "hashcat", jsonBufTemp->valuestring)
+					> 0) {
+				cJSON_Delete(jsonBuf);
 				exit(1);
 			}
 
 			// Update benchmark
+			char vendorPath[PATH_MAX + 1];
+			strcpy(vendorPath, currentPath);
+			strcat(vendorPath, "vendor");
+			strcat(vendorPath, PATH_SEPARATOR);
+			strcat(vendorPath, VENDOR_CRACKER);
+			strcat(vendorPath, PATH_SEPARATOR);
+			strcat(vendorPath, "hashcat");
+			strcat(vendorPath, PATH_SEPARATOR);
+			strcat(vendorPath, jsonBufTemp->valuestring);
+			strcat(vendorPath, PATH_SEPARATOR);
+			strcat(vendorPath, jsonBufTemp->valuestring);
+
 			jsonBufTemp = getJsonObject(jsonBuf, "benchmark", NULL);
 			if (jsonBufTemp) { // benchmark option exists in platform in config file
 				cJSON_ReplaceItemInObject(jsonBuf, "benchmark",
@@ -675,6 +664,44 @@ void chkServerDependentConfigs(void) {
 	chkPlatform();
 }
 
+int chkVendor(const char *type, const char *name, const char *platform) {
+	char vendorPath[PATH_MAX + 1];
+
+	strcpy(vendorPath, currentPath);
+	strcat(vendorPath, "vendor");
+	strcat(vendorPath, PATH_SEPARATOR);
+	strcat(vendorPath, type);
+	strcat(vendorPath, PATH_SEPARATOR);
+	strcat(vendorPath, name);
+	strcat(vendorPath, PATH_SEPARATOR);
+	strcat(vendorPath, platform);
+	strcat(vendorPath, PATH_SEPARATOR);
+	strcat(vendorPath, platform);
+
+	if (fileExists(vendorPath)) {
+		return 0;
+	} else {
+		cJSON *vendorData;
+		vendorData = cJSON_CreateObject();
+		cJSON_AddItemToObject(vendorData, "vendor_type",
+				cJSON_CreateString(type));
+		cJSON_AddItemToObject(vendorData, "name", cJSON_CreateString(name));
+		cJSON_AddItemToObject(vendorData, "platform_id",
+				cJSON_CreateString(platform));
+
+		reqGetVendor(vendorData);
+		cJSON_Delete(vendorData);
+
+		if (fileExists(vendorPath)) {
+			return 0;
+		} else {
+			fprintf(stderr, "Vendor file not downloaded: %s\n", vendorPath);
+
+			return 1;
+		}
+	}
+}
+
 const char *getReqUri(int req) {
 	if (req == REQ_GET_VENDOR)
 		return URI_GET_VENDOR;
@@ -690,42 +717,6 @@ const char *getReqUri(int req) {
 	return "";
 }
 
-const char *getCracker(const char *mapFilePath, const char *algoId) {
-	if (fileExists(mapFilePath)) {
-		char *strBuf;
-		if (fileGetContents(&strBuf, mapFilePath, NULL) < 0)
-			return "\0";
-
-		cJSON *jsonBuf;
-		jsonBuf = cJSON_Parse(strBuf);
-		free(strBuf);
-
-		if (jsonBuf) {
-			cJSON *jsonMap = jsonBuf->child;
-			while (jsonMap) {
-				jsonBufTemp = getJsonObject(jsonMap, "algo_id",
-						"'algo_id' not found in algo-cracker file!");
-				if (jsonBufTemp) {
-					if (strncmp(algoId, jsonBufTemp->valuestring,
-							strlen(algoId)) == 0) {
-						jsonBufTemp = getJsonObject(jsonMap, "cracker",
-								"'cracker' not found in algo-cracker file!");
-						if (jsonBufTemp)
-							return jsonBufTemp->valuestring;
-					}
-				}
-
-				jsonMap = jsonMap->next;
-			}
-		} else {
-			fprintf(stderr, "Invalid JSON in algo-cracker file: %s\n",
-					mapFilePath);
-		}
-	}
-
-	return "\0";
-}
-
 /**
  * cJSON taskInfo {"crack_id":"", "start":"", "offset":"", "platform":""}
  */
@@ -738,356 +729,210 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo) {
 		crackInfo = cJSON_Parse(strBuf);
 		free(strBuf);
 
-		// cJSON crackInfo {"id":"","gen_name":"","algo_id":"","algo_name":"","lenMin":"","lenMax":"","charset1":"","charset2":"","charset3":"","charset4":"","mask":""}
+		// cJSON crackInfo {"id":"","generator":"","cracker":"","cmd_generator":"","cmd_cracker":""}
 		if (crackInfo) {
 			do { // An once loop to utilize break!
 				char pathBuf[PATH_MAX + 1], platformId[20];
+
 				jsonBufTemp = getJsonObject(*taskInfo, "platform",
 						"'platform' not found in response of get task!");
-				if (!jsonBufTemp)
+				if (jsonBufTemp) {
+					strncpy(platformId, jsonBufTemp->valuestring, 19);
+					platformId[20] = '\0';
+					cJSON_DeleteItemFromObject(*taskInfo, "platform"); // Delete platform, preparing taskInfo to send back to server
+				} else {
+					cJSON_Delete(crackInfo);
 					break;
-				strncpy(platformId, jsonBufTemp->valuestring, 19);
-				platformId[20] = '\0';
-				cJSON_DeleteItemFromObject(*taskInfo, "platform"); // Delete platform, preparing taskInfo to send back to server
+				}
 
-				/* Determine crakcer */
-				strcpy(pathBuf, currentPath);
-				strcat(pathBuf, CONFIG_PATH);
-				strcat(pathBuf, ALGO_CRACKER_DIR);
-				strcat(pathBuf, PATH_SEPARATOR);
-				strcat(pathBuf, platformId);
-				strcat(pathBuf, ".force");
+				// Check cmd_generator
+				char cmdGenerator[PATH_MAX + 1];
+				jsonBufTemp = getJsonObject(crackInfo, "cmd_generator", NULL);
+				if (jsonBufTemp && (strlen(jsonBufTemp->valuestring) > 0)) { // It's not empty, should use infile with mkfifo
+					strcpy(cmdGenerator, jsonBufTemp->valuestring);
+					cmdGenerator[strlen(jsonBufTemp->valuestring)] = '\0';
+				}
 
-				char crackerName[PATH_MAX + 1];
-				crackerName[0] = '\0';
-
-				/* Check user defined algo-cracker */
-				jsonBufTemp = getJsonObject(crackInfo, "algo_id",
-						"'algo_id' not found in crack info file!");
-				if (!jsonBufTemp)
+				// Check cmd_cracker
+				char cmdCracker[PATH_MAX + 1];
+				jsonBufTemp = getJsonObject(crackInfo, "cmd_cracker", NULL);
+				if (jsonBufTemp && (strlen(jsonBufTemp->valuestring) > 0)) {
+					strcpy(cmdCracker, jsonBufTemp->valuestring);
+					cmdCracker[strlen(jsonBufTemp->valuestring)] = '\0';
+				} else {
+					fprintf(stderr,
+							"'cmd_cracker' is not set in crack info file: %s\n",
+							crackInfoPath);
+					cJSON_Delete(crackInfo);
 					break;
-				strcpy(crackerName,
-						getCracker(pathBuf, jsonBufTemp->valuestring));
+				}
 
-				/* Check default algo-cracker */
-				if (strlen(crackerName) < 1) { // Cracker not determined
-					pathBuf[strlen(pathBuf) - 6] = '\0'; // Remove .force
-					jsonBufTemp = getJsonObject(crackInfo, "algo_id",
-							"'algo_id' not found in crack info file!");
-					if (!jsonBufTemp)
+				// Check generator
+				jsonBufTemp = getJsonObject(crackInfo, "generator", NULL);
+				if (jsonBufTemp && (strlen(jsonBufTemp->valuestring) > 0)) {
+					if (chkVendor(VENDOR_GENERATOR, jsonBufTemp->valuestring,
+							platformId) > 0) {
+						cJSON_Delete(crackInfo);
 						break;
-					strcpy(crackerName,
-							getCracker(pathBuf, jsonBufTemp->valuestring));
-				}
+					}
 
-				/* No cracker name found, use default cracker (hashcat) */
-				if (strlen(crackerName) < 1) { // Cracker not determined
-					if (strncmp("cpu", platformId, 3)) // Default cpu cracker
-						strcpy(crackerName, "hashcat");
-					else if (strncmp("gpu", platformId, 3)) // Default cpu cracker
-						strcpy(crackerName, "hashcat");
-				}
-
-				if (strlen(crackerName) > 0) { // Cracker determined
-					// Check vendor file
+					/* Replace GENERATOR */
+					// Prepare generator's path
 					strcpy(pathBuf, currentPath);
 					strcat(pathBuf, "vendor");
 					strcat(pathBuf, PATH_SEPARATOR);
-					strcat(pathBuf, "cracker");
+					strcat(pathBuf, VENDOR_GENERATOR);
 					strcat(pathBuf, PATH_SEPARATOR);
-					strcat(pathBuf, crackerName);
+					strcat(pathBuf, jsonBufTemp->valuestring);
+					strcat(pathBuf, PATH_SEPARATOR);
+					strcat(pathBuf, platformId);
+					strcat(pathBuf, PATH_SEPARATOR);
+					strcat(pathBuf, platformId);
+
+					if (strlen(cmdGenerator) > 0) {
+						strcpy(cmdGenerator,
+								strReplace(cmdGenerator, "GENERATOR", pathBuf));
+					}
+					strcpy(cmdCracker,
+							strReplace(cmdCracker, "GENERATOR", pathBuf));
+				}
+
+				// Check cracker
+				jsonBufTemp = getJsonObject(crackInfo, "cracker", NULL);
+				if (jsonBufTemp && (strlen(jsonBufTemp->valuestring) > 0)) {
+					if (chkVendor(VENDOR_CRACKER, jsonBufTemp->valuestring,
+							platformId) > 0) {
+						cJSON_Delete(crackInfo);
+						break;
+					}
+
+					/* Replace CRACKER */
+					// Prepare cracker's path
+					strcpy(pathBuf, currentPath);
+					strcat(pathBuf, "vendor");
+					strcat(pathBuf, PATH_SEPARATOR);
+					strcat(pathBuf, VENDOR_CRACKER);
+					strcat(pathBuf, PATH_SEPARATOR);
+					strcat(pathBuf, jsonBufTemp->valuestring);
 					strcat(pathBuf, PATH_SEPARATOR);
 					strcat(pathBuf, platformId);
 					strcat(pathBuf, PATH_SEPARATOR);
 					strcat(pathBuf, platformId);
 
-					cJSON *cracker;
-					if (!fileExists(pathBuf)) {
-						cracker = cJSON_CreateObject();
-						cJSON_AddItemToObject(cracker, "vendor_type",
-								cJSON_CreateString("cracker"));
-						cJSON_AddItemToObject(cracker, "name",
-								cJSON_CreateString(crackerName));
-						cJSON_AddItemToObject(cracker, "platform_id",
-								cJSON_CreateString(platformId));
+					strcpy(cmdCracker,
+							strReplace(cmdCracker, "CRACKER", pathBuf));
+				}
 
-						reqGetVendor(cracker);
+				if (strlen(cmdGenerator) > 0) { // The crack will be done in two separate commands linking with infile using mkfifo
+					strcpy(pathBuf, crackInfoPath);
+					strcpy(pathBuf, getDirName(pathBuf));
+					strcat(pathBuf, PATH_SEPARATOR);
+					strcat(pathBuf, "infile.fifo");
+
+					// Replace IN_FILE in cmd_generator
+					strcpy(cmdGenerator,
+							strReplace(cmdGenerator, "IN_FILE", pathBuf));
+
+					// Replace IN_FILE in cmd_cracker
+					strcpy(cmdCracker,
+							strReplace(cmdCracker, "IN_FILE", pathBuf));
+
+					// Replace START
+					jsonBufTemp = getJsonObject(*taskInfo, "start",
+							"'start' not found in response of get task!");
+					if (jsonBufTemp) {
+						strcpy(cmdGenerator,
+								strReplace(cmdGenerator, "START",
+										jsonBufTemp->valuestring));
+					} else {
+						cJSON_Delete(crackInfo);
+						break;
 					}
 
-					char crackerCmd[PATH_MAX + 1];
-					strcpy(crackerCmd, pathBuf);
-					strcat(crackerCmd, " ");
-
-					// Prepare crack for execution
-					if (fileGetContents(&strBuf, pathBuf,
-							"Crack info file not valid!") > 0) {
-						cracker = cJSON_Parse(strBuf);
-						free(strBuf);
-						cJSON *jsonBuf = getJsonObject(cracker, "config",
-								"'config' not found in cracker info!");
-
-						if (jsonBuf) {
-							char char1[255], char2[255], char3[255], char4[255];
-
-							jsonBuf = getJsonObject(jsonBuf, "args_opt",
-									"'args_opt' not found in cracker info!");
-							if (jsonBuf) {
-								// Prepare CHAR1
-								jsonBufTemp = getJsonObject(jsonBuf, "CHAR1",
-								NULL);
-								if (jsonBufTemp) {
-									strcpy(char1, jsonBufTemp->valuestring);
-
-									jsonBufTemp = getJsonObject(crackInfo,
-											"charset1", NULL);
-									if (jsonBufTemp
-											&& strlen(jsonBufTemp->valuestring)
-													> 0) {
-										strcpy(char1,
-												strReplace(char1, "CHAR1",
-														jsonBufTemp->valuestring));
-									} else {
-										char1[0] = '\0';
-									}
-								} else {
-									char1[0] = '\0';
-								}
-
-								// Prepare CHAR2
-								jsonBufTemp = getJsonObject(jsonBuf, "CHAR2",
-								NULL);
-								if (jsonBufTemp) {
-									strcpy(char2, jsonBufTemp->valuestring);
-
-									jsonBufTemp = getJsonObject(crackInfo,
-											"charset2", NULL);
-									if (jsonBufTemp
-											&& strlen(jsonBufTemp->valuestring)
-													> 0) {
-										strcpy(char2,
-												strReplace(char2, "CHAR2",
-														jsonBufTemp->valuestring));
-									} else {
-										char2[0] = '\0';
-									}
-								} else {
-									char2[0] = '\0';
-								}
-
-								// Prepare CHAR3
-								jsonBufTemp = getJsonObject(jsonBuf, "CHAR3",
-								NULL);
-								if (jsonBufTemp) {
-									strcpy(char3, jsonBufTemp->valuestring);
-
-									jsonBufTemp = getJsonObject(crackInfo,
-											"charset3", NULL);
-									if (jsonBufTemp
-											&& strlen(jsonBufTemp->valuestring)
-													> 0) {
-										strcpy(char3,
-												strReplace(char3, "CHAR3",
-														jsonBufTemp->valuestring));
-									} else {
-										char3[0] = '\0';
-									}
-								} else {
-									char3[0] = '\0';
-								}
-
-								// Prepare CHAR4
-								jsonBufTemp = getJsonObject(jsonBuf, "CHAR4",
-								NULL);
-								if (jsonBufTemp) {
-									strcpy(char4, jsonBufTemp->valuestring);
-
-									jsonBufTemp = getJsonObject(crackInfo,
-											"charset4", NULL);
-									if (jsonBufTemp
-											&& strlen(jsonBufTemp->valuestring)
-													> 0) {
-										strcpy(char4,
-												strReplace(char4, "CHAR4",
-														jsonBufTemp->valuestring));
-									} else {
-										char4[0] = '\0';
-									}
-								} else {
-									char4[0] = '\0';
-								}
-							} else {
-								char1[0] = '\0';
-								char2[0] = '\0';
-								char3[0] = '\0';
-								char4[0] = '\0';
-							}
-
-							/* Prepare cracker command */
-							// Create hashfile
-							jsonBufTemp = getJsonObject(crackInfo, "target",
-									"'target' not found in crack info!");
-							if (!jsonBufTemp)
-								break;
-							strcpy(pathBuf, crackInfoPath);
-							strcpy(pathBuf, getDirName(pathBuf));
-							strcat(pathBuf, PATH_SEPARATOR);
-							strcat(pathBuf, "hashfile");
-							FILE *hashFile;
-							hashFile = fopen(pathBuf, "wb");
-							if (!hashFile) {
-								fprintf(stderr, "Can not create hash file!\n");
-								break;
-							}
-							fputs(jsonBufTemp->valuestring, hashFile);
-							fclose(hashFile);
-
-							jsonBufTemp = getJsonObject(cracker, "config",
-									"'config' not found in cracker info!");
-							if (jsonBufTemp) {
-								jsonBufTemp = getJsonObject(jsonBufTemp, "args",
-										"'args' not found in cracker info!");
-								if (jsonBufTemp) {
-									strcat(crackerCmd,
-											jsonBufTemp->valuestring);
-
-									/* Replace args with their value */
-
-									// Replace START
-									jsonBufTemp =
-											getJsonObject(*taskInfo, "start",
-													"'start' not found in response of get task!");
-									if (!jsonBufTemp)
-										break;
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "START",
-													jsonBufTemp->valuestring));
-
-									// Replace OFFSET
-									jsonBufTemp =
-											getJsonObject(*taskInfo, "offset",
-													"'offset' not found in response of get task!");
-									if (!jsonBufTemp)
-										break;
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "OFFSET",
-													jsonBufTemp->valuestring));
-
-									int algoFlag = 0;
-
-									// Replace ALGO_ID
-									jsonBufTemp =
-											getJsonObject(crackInfo, "algo_id",
-													"'algo_id' not found in crack info file!");
-									if (jsonBufTemp) {
-										strcpy(crackerCmd,
-												strReplace(crackerCmd,
-														"ALGO_ID",
-														jsonBufTemp->valuestring));
-										algoFlag = 1;
-									}
-
-									// Replace ALGO_NAME
-									jsonBufTemp =
-											getJsonObject(crackInfo,
-													"algo_name",
-													"'algo_name' not found in crack info!");
-									if (jsonBufTemp) {
-										strcpy(crackerCmd,
-												strReplace(crackerCmd,
-														"ALGO_NAME",
-														jsonBufTemp->valuestring));
-										algoFlag = 1;
-									}
-
-									if (algoFlag == 0)
-										break;
-
-									// Replace LEN_MIN
-									jsonBufTemp =
-											getJsonObject(crackInfo, "lenMin",
-													"'lenMin' not found in crack info!");
-									if (!jsonBufTemp)
-										break;
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "LEN_MIN",
-													jsonBufTemp->valuestring));
-
-									// Replace LEN_MAX
-									jsonBufTemp =
-											getJsonObject(crackInfo, "lenMax",
-													"'lenMax' not found in crack info!");
-									if (!jsonBufTemp)
-										break;
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "LEN_MAX",
-													jsonBufTemp->valuestring));
-
-									// Replace MASK
-									jsonBufTemp = getJsonObject(crackInfo,
-											"mask",
-											"'mask' not found in crack info!");
-									if (!jsonBufTemp)
-										break;
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "MASK",
-													jsonBufTemp->valuestring));
-
-									// Replace CHAR1
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "CHAR1",
-													char1));
-
-									// Replace CHAR2
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "CHAR2",
-													char2));
-
-									// Replace CHAR3
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "CHAR3",
-													char3));
-
-									// Replace CHAR4
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "CHAR4",
-													char4));
-
-									// Replace HASH_FILE
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "HASH_FILE",
-													pathBuf));
-
-									// Replace OUT_FILE
-									strcat(pathBuf, ".out");
-									strcpy(crackerCmd,
-											strReplace(crackerCmd, "OUT_FILE",
-													pathBuf));
-								}
-							}
-
-							/* Execute crack */
-							ret = system(crackerCmd); // Return: <0: not executed successfully; 0: executed successfully; >0: executed with error;
-
-							if (fileGetContents(&strBuf, pathBuf, NULL) > 0) { // Out file is not empty, so send it to server
-								cJSON_AddStringToObject(*taskInfo, "result",
-										strBuf);
-								free(strBuf);
-							}
-							/* Execution finished */
-						}
+					// Replace OFFSET
+					jsonBufTemp = getJsonObject(*taskInfo, "offset",
+							"'offset' not found in response of get task!");
+					if (jsonBufTemp) {
+						strcpy(cmdGenerator,
+								strReplace(cmdGenerator, "OFFSET",
+										jsonBufTemp->valuestring));
+					} else {
+						cJSON_Delete(crackInfo);
+						break;
 					}
-					cJSON_Delete(cracker);
-				} else { // Cracker not determined
-					jsonBufTemp = getJsonObject(*taskInfo, "crack_id",
-							"'crack_id' not found in response of get task!");
-					if (jsonBufTemp)
-						fprintf(stderr,
-								"Can't find a cracker to do the crack. crack_id: %s, platform: %s\n",
-								jsonBufTemp->valuestring, platformId);
-					else
-						fprintf(stderr,
-								"Can't find a cracker to do the crack. crack_id: ?, platform: %s\n",
-								platformId);
+				} else { // The crack will be done in a signle command
+					// Replace START
+					jsonBufTemp = getJsonObject(*taskInfo, "start",
+							"'start' not found in response of get task!");
+					if (jsonBufTemp) {
+						strcpy(cmdCracker,
+								strReplace(cmdCracker, "START",
+										jsonBufTemp->valuestring));
+					} else {
+						cJSON_Delete(crackInfo);
+						break;
+					}
+
+					// Replace OFFSET
+					jsonBufTemp = getJsonObject(*taskInfo, "offset",
+							"'offset' not found in response of get task!");
+					if (jsonBufTemp) {
+						strcpy(cmdCracker,
+								strReplace(cmdCracker, "OFFSET",
+										jsonBufTemp->valuestring));
+					} else {
+						cJSON_Delete(crackInfo);
+						break;
+					}
+				}
+
+				// Create hashfile
+				jsonBufTemp = getJsonObject(crackInfo, "target", NULL);
+				if (jsonBufTemp && (strlen(jsonBufTemp->valuestring) > 0)) {
+					strcpy(pathBuf, crackInfoPath);
+					strcpy(pathBuf, getDirName(pathBuf));
+					strcat(pathBuf, PATH_SEPARATOR);
+					strcat(pathBuf, "hashfile");
+
+					FILE *hashFile;
+					hashFile = fopen(pathBuf, "wb");
+					if (!hashFile) {
+						fprintf(stderr, "Can not create hash file: %s\n",
+								pathBuf);
+						cJSON_Delete(crackInfo);
+						break;
+					}
+					fputs(jsonBufTemp->valuestring, hashFile);
+					fclose(hashFile);
+				} else {
+					fprintf(stderr,
+							"'target' is not set in crack info file: %s\n",
+							crackInfoPath);
+					cJSON_Delete(crackInfo);
+					break;
+				}
+
+				// Replace HASH_FILE
+				strcpy(cmdCracker,
+						strReplace(cmdCracker, "HASH_FILE", pathBuf));
+
+				// Replace OUT_FILE
+				strcat(pathBuf, ".out");
+				strcpy(cmdCracker, strReplace(cmdCracker, "OUT_FILE", pathBuf));
+
+				/* Execute crack */
+				if (strlen(cmdGenerator) > 0) { // Execute with mkfifo
+					puts("EXECUTION OF MKFIFO IS NOT IMPLEMENTED YET!:");
+					puts(cmdGenerator);
+					puts(cmdCracker);
+					ret = -3;
+				} else { // Execute in one command
+					ret = system(cmdCracker); // Return: <0: not executed successfully; 0: executed successfully; >0: executed with error;
+				}
+
+				if (fileGetContents(&strBuf, pathBuf, NULL) > 0) { // Out file is not empty, so send it to server
+					cJSON_AddStringToObject(*taskInfo, "result", strBuf);
+					free(strBuf);
 				}
 			} while (0); // End of once loop
 
