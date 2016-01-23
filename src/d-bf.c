@@ -110,7 +110,7 @@ void reqGetTask(void);
 void resGetTask(const char *resBodyPath);
 void reqSendResult(cJSON *jsonResults);
 void resSendResult(const char *resBodyPath, cJSON *reqData);
-void reqGetCrackInfo(const char *crackId);
+void reqGetCrackInfo(cJSON *jsonReqCrackInfo);
 void resGetCrackInfo(const char *resBodyPath, cJSON *reqData);
 
 /* Main function entry point */
@@ -1275,10 +1275,10 @@ void resGetTask(const char *resBodyPath) {
 		free(strBuf);
 
 		if (jsonTasks) {
-			cJSON *jsonTask = jsonTasks->child, *jsonResults =
-					cJSON_CreateArray();
+			cJSON *jsonReqCrackInfo, *jsonTask = jsonTasks->child,
+					*jsonResults = cJSON_CreateArray();
 			char crackInfoPath[PATH_MAX + 1];
-			// TODO:Do cracks of each platform in parallel
+			// TODO: Do cracks of each platform in parallel
 			while (jsonTask) {
 				// {"crack_id":"","start":"","offset":"","platform":""}
 				jsonBufTemp = getJsonObject(jsonTask, "crack_id",
@@ -1292,7 +1292,22 @@ void resGetTask(const char *resBodyPath) {
 					strcat(crackInfoPath, "info.json");
 
 					if (!fileExists(crackInfoPath)) { // Get crack info if needed
-						reqGetCrackInfo(jsonBufTemp->valuestring);
+						jsonReqCrackInfo = cJSON_CreateObject();
+
+						cJSON_AddItemReferenceToObject(jsonReqCrackInfo, "id",
+								jsonBufTemp);
+
+						jsonBufTemp =
+								getJsonObject(jsonTask, "platform",
+										"'platform' not found in response of get task!");
+						if (jsonBufTemp) {
+							cJSON_AddItemReferenceToObject(jsonReqCrackInfo,
+									"platform", jsonBufTemp);
+
+							reqGetCrackInfo(jsonReqCrackInfo);
+
+							cJSON_Delete(jsonReqCrackInfo);
+						}
 					}
 
 					if (fileExists(crackInfoPath)) {
@@ -1345,13 +1360,8 @@ void resSendResult(const char *resBodyPath, cJSON *reqData) {
 	}
 }
 
-void reqGetCrackInfo(const char *crackId) {
-	cJSON *jsonReqData = cJSON_CreateObject();
-
-	cJSON_AddItemToObject(jsonReqData, "id", cJSON_CreateString(crackId));
-
-	sendRequest(REQ_GET_CRACK_INFO, jsonReqData);
-	cJSON_Delete(jsonReqData);
+void reqGetCrackInfo(cJSON *jsonReqCrackInfo) {
+	sendRequest(REQ_GET_CRACK_INFO, jsonReqCrackInfo);
 }
 
 void resGetCrackInfo(const char *resBodyPath, cJSON *reqData) {
