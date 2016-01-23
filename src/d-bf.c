@@ -55,13 +55,11 @@
 #define URI_GET_VENDOR "vendor/get"
 #define REQ_UPDATE_VENDOR 2
 #define URI_UPDATE_VENDOR "vendor/update"
-#define REQ_GET_ALGO_CRACKER 3
-#define URI_GET_ALGO_CRACKER "get/algo-cracker"
-#define REQ_GET_TASK 4
+#define REQ_GET_TASK 3
 #define URI_GET_TASK "task/get"
-#define REQ_GET_CRACK_INFO 5
+#define REQ_GET_CRACK_INFO 4
 #define URI_GET_CRACK_INFO "crack/info"
-#define REQ_SEND_RESULT 6
+#define REQ_SEND_RESULT 5
 #define URI_SEND_RESULT "task/result"
 
 char CONFIG_PATH[8] = "config";
@@ -104,8 +102,6 @@ const char *getCracker(const char *mapFilePath, const char *algoId);
 int doCrack(const char *crackInfoPath, cJSON **taskInfo);
 size_t writeFunction(void *ptr, size_t size, size_t nmemb, void *stream);
 int sendRequest(int reqType, cJSON *data);
-void reqGetAlgoCracker(cJSON *reqData);
-void resGetAlgoCracker(const char *resBodyPath, cJSON *reqData);
 void reqGetVendor(cJSON *vendorFile);
 void resGetVendor(const char *resBodyPath, cJSON *reqData);
 void reqUpdateVendor(void);
@@ -708,29 +704,6 @@ void setUrlApiVer(void) {
 
 void chkServerDependentConfigs(void) {
 	chkPlatform();
-
-	char filePath[PATH_MAX + 1];
-	strcpy(filePath, currentPath);
-	strcat(filePath, CONFIG_PATH);
-	strcat(filePath, ALGO_CRACKER_DIR);
-
-	if (!dirExists(filePath))
-		mkdirRecursive(filePath);
-
-	cJSON *jsonBuf = getPlatform(0), *reqData = cJSON_CreateArray();
-	jsonBuf = jsonBuf->child;
-	while (jsonBuf) {
-		jsonBufTemp = getJsonObject(jsonBuf, "id",
-				"'id' not found in 'platform' in config file!");
-		if (jsonBufTemp)
-			cJSON_AddItemReferenceToArray(reqData, jsonBufTemp);
-
-		jsonBuf = jsonBuf->next;
-	}
-	reqGetAlgoCracker(reqData);
-
-	cJSON_Delete(jsonBuf);
-	cJSON_Delete(reqData);
 }
 
 const char *getReqUri(int req) {
@@ -738,8 +711,6 @@ const char *getReqUri(int req) {
 		return URI_GET_VENDOR;
 	if (req == REQ_UPDATE_VENDOR)
 		return URI_UPDATE_VENDOR;
-	if (req == REQ_GET_ALGO_CRACKER)
-		return URI_GET_ALGO_CRACKER;
 	if (req == REQ_GET_TASK)
 		return URI_GET_TASK;
 	if (req == REQ_GET_CRACK_INFO)
@@ -1262,9 +1233,6 @@ int sendRequest(int reqType, cJSON *data) {
 			case REQ_UPDATE_VENDOR:
 				resUpdateVendor(resBodyFilePath);
 				break;
-			case REQ_GET_ALGO_CRACKER:
-				resGetAlgoCracker(resBodyFilePath, data);
-				break;
 			case REQ_GET_TASK:
 				resGetTask(resBodyFilePath);
 				break;
@@ -1286,64 +1254,6 @@ int sendRequest(int reqType, cJSON *data) {
 		return resCode;
 	} else {
 		return -1;
-	}
-}
-
-void reqGetAlgoCracker(cJSON *reqData) {
-	sendRequest(REQ_GET_ALGO_CRACKER, reqData);
-}
-
-void resGetAlgoCracker(const char *resBodyPath, cJSON *reqData) {
-	char *strBuf;
-	long int resSize;
-
-	resSize = fileGetContents(&strBuf, resBodyPath,
-			"Can't open response file of algo-cracker!");
-	if (resSize > 0) {
-		cJSON *jsonResponse = cJSON_Parse(strBuf);
-		free(strBuf);
-
-		if (!jsonResponse) {
-			fprintf(stderr, "Not a valid JSON response for algo-cracker!\n");
-			return;
-		}
-
-		char algoCrackerDirPath[PATH_MAX + 1], algoCrackerPath[PATH_MAX + 1];
-
-		strcpy(algoCrackerDirPath, currentPath);
-		strcat(algoCrackerDirPath, CONFIG_PATH);
-		strcat(algoCrackerDirPath, ALGO_CRACKER_DIR);
-
-		FILE *algoCrackerFile;
-		cJSON *jsonPlat = reqData->child;
-		while (jsonPlat) {
-			jsonBufTemp = getJsonObject(jsonResponse, jsonPlat->valuestring,
-			NULL);
-			if (jsonBufTemp) {
-				strcpy(algoCrackerPath, algoCrackerDirPath);
-				strcat(algoCrackerPath, PATH_SEPARATOR);
-				strcat(algoCrackerPath, jsonPlat->valuestring);
-
-				algoCrackerFile = fopen(algoCrackerPath, "wb");
-				if (algoCrackerFile) {
-					fputs(cJSON_PrintUnformatted(jsonBufTemp), algoCrackerFile);
-					fclose(algoCrackerFile);
-
-					chmod(algoCrackerPath,
-					S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); // rwx rwx r-x (775)
-				} else {
-					fprintf(stderr,
-							"Can not create/open algo-cracker file: %s\n",
-							algoCrackerPath);
-				}
-			}
-
-			jsonPlat = jsonPlat->next;
-		}
-
-		cJSON_Delete(jsonResponse);
-	} else {
-		fprintf(stderr, "Not a valid response for algo-cracker!\n");
 	}
 }
 
