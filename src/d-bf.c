@@ -534,7 +534,7 @@ void chkPlatform(void) {
 		jsonBufTemp = getJsonObject(jsonBuf, "id",
 				"'id' not found in 'platform' in config file!");
 		if (jsonBufTemp) {
-			// Check default vendor info
+			// Check default vendor file
 			strcpy(vendorPath, currentPath);
 			strcat(vendorPath, "vendor");
 			strcat(vendorPath, PATH_SEPARATOR);
@@ -544,47 +544,16 @@ void chkPlatform(void) {
 			strcat(vendorPath, PATH_SEPARATOR);
 			strcat(vendorPath, jsonBufTemp->valuestring); // Platform id
 			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, "config.json");
+			strcat(vendorPath, jsonBufTemp->valuestring); // Platform id
+
 			if (!fileExists(vendorPath)) {
 				vendorData = cJSON_CreateObject();
-				cJSON_AddItemToObject(vendorData, "object_type",
-						cJSON_CreateString("info"));
 				cJSON_AddItemToObject(vendorData, "vendor_type",
 						cJSON_CreateString("cracker"));
 				cJSON_AddItemToObject(vendorData, "name",
 						cJSON_CreateString("hashcat"));
 				cJSON_AddItemToObject(vendorData, "platform_id",
 						cJSON_CreateString(jsonBufTemp->valuestring)); // Platform id
-
-				reqGetVendor(vendorData);
-			}
-			if (!fileExists(vendorPath)) {
-				if (vendorData)
-					cJSON_Delete(vendorData);
-				fprintf(stderr, "Vendor info not gotten: %s\n", vendorPath);
-				exit(1);
-			}
-
-			// Check default vendor file
-			strcpy(vendorPath, getDirName(vendorPath));
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, jsonBufTemp->valuestring); // Platform id
-			if (!fileExists(vendorPath)) {
-				if (vendorData) {
-					strcpy(
-							getJsonObject(vendorData, "object_type", NULL)->valuestring,
-							"file");
-				} else {
-					vendorData = cJSON_CreateObject();
-					cJSON_AddItemToObject(vendorData, "object_type",
-							cJSON_CreateString("file"));
-					cJSON_AddItemToObject(vendorData, "vendor_type",
-							cJSON_CreateString("cracker"));
-					cJSON_AddItemToObject(vendorData, "name",
-							cJSON_CreateString("hashcat"));
-					cJSON_AddItemToObject(vendorData, "platform_id",
-							cJSON_CreateString(jsonBufTemp->valuestring)); // Platform id
-				}
 
 				reqGetVendor(vendorData);
 			}
@@ -835,8 +804,6 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo) {
 					cJSON *cracker;
 					if (!fileExists(pathBuf)) {
 						cracker = cJSON_CreateObject();
-						cJSON_AddItemToObject(cracker, "object_type",
-								cJSON_CreateString("file"));
 						cJSON_AddItemToObject(cracker, "vendor_type",
 								cJSON_CreateString("cracker"));
 						cJSON_AddItemToObject(cracker, "name",
@@ -850,30 +817,6 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo) {
 					char crackerCmd[PATH_MAX + 1];
 					strcpy(crackerCmd, pathBuf);
 					strcat(crackerCmd, " ");
-
-					// Check vendor info
-					strcpy(pathBuf, getDirName(pathBuf));
-					strcat(pathBuf, PATH_SEPARATOR);
-					strcat(pathBuf, "config.json");
-					if (!fileExists(pathBuf)) {
-						if (cracker) {
-							strcpy(
-									getJsonObject(cracker, "object_type", NULL)->valuestring,
-									"info");
-						} else {
-							cracker = cJSON_CreateObject();
-							cJSON_AddItemToObject(cracker, "object_type",
-									cJSON_CreateString("info"));
-							cJSON_AddItemToObject(cracker, "vendor_type",
-									cJSON_CreateString("cracker"));
-							cJSON_AddItemToObject(cracker, "name",
-									cJSON_CreateString(crackerName));
-							cJSON_AddItemToObject(cracker, "platform_id",
-									cJSON_CreateString(platformId));
-						}
-
-						reqGetVendor(cracker);
-					}
 
 					// Prepare crack for execution
 					if (fileGetContents(&strBuf, pathBuf,
@@ -1272,8 +1215,7 @@ void resGetVendor(const char *resBodyPath, cJSON *reqData) {
 	} else {
 		if (strncmp(strBuf, "0", resSize) == 0) {
 			fprintf(stderr,
-					"Vendor not found in server. object_type: %s, vendor_type: %s, name: %s\n",
-					getJsonObject(reqData, "object_type", NULL)->valuestring,
+					"Vendor not found in server. vendor_type: %s, name: %s\n",
 					getJsonObject(reqData, "vendor_type", NULL)->valuestring,
 					getJsonObject(reqData, "name", NULL)->valuestring);
 
@@ -1298,13 +1240,9 @@ void resGetVendor(const char *resBodyPath, cJSON *reqData) {
 			getJsonObject(reqData, "platform_id", NULL)->valuestring);
 	strcat(vendorResPath, PATH_SEPARATOR);
 
-	if (strcmp(getJsonObject(reqData, "object_type", NULL)->valuestring, "info")
-			== 0) // Vendor info
-		strcat(vendorResPath, "config.json");
-	else
-		// Vendor file
-		strcat(vendorResPath,
-				getJsonObject(reqData, "platform_id", NULL)->valuestring);
+	// Vendor file
+	strcat(vendorResPath,
+			getJsonObject(reqData, "platform_id", NULL)->valuestring);
 
 	fileCopy(resBodyPath, vendorResPath);
 
