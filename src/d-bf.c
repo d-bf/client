@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
 
 	clearScreen();
 
-	int wait = 5; // Minimum time to wait between checks (in seconds)
+	int wait = 15; // Minimum time to wait between checks (in seconds)
 	double elapsed;
 	time_t startTime;
 	while (1) { // TODO: Infinite loop
