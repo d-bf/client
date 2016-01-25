@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <sys/stat.h>
 
-#include "curl/curl.h"
+#include <curl/curl.h>
 
 #include "./lib/cJSON/cJSON.h"
 #include "./lib/base64/base64.h"
