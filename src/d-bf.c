@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 #include <ctype.h>
 #include <sys/stat.h>
 
@@ -509,7 +510,7 @@ long long int getBenchCpu(const char *vendorPath) {
 	}
 	pclose(benchStream);
 
-	return llround(bench / 1);
+	return llround(bench);
 }
 
 void chkPlatform(void) {
