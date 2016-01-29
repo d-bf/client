@@ -97,7 +97,7 @@ cJSON *getJsonObject(cJSON *object, const char *option,
 		const char *errorMessage);
 cJSON *getJsonFile(void);
 double getBench(char *benchStr);
-long long int getBenchCpu(const char *vendorPath);
+long long int getBenchCracker(char *crackerPath);
 void chkPlatform(void);
 cJSON *getPlatform(int active);
 void setUrlApiVer(void);
@@ -509,15 +509,14 @@ double getBench(char *benchStr) {
 	return bench;
 }
 
-long long int getBenchCpu(const char *vendorPath) {
-	char benchStr[256], cmdBench[PATH_MAX + 1];
+long long int getBenchCracker(char *crackerPath) {
+	char benchStr[256];
 	FILE *benchStream;
 	double bench = 0;
 
-	strcpy(cmdBench, vendorPath);
-	strcat(cmdBench, " -b -m0");
-	if (!(benchStream = popen(cmdBench, "r"))) {
-		fprintf(stderr, "Can't get benchmark: %s\n", cmdBench);
+	strcat(crackerPath, " -b -m0");
+	if (!(benchStream = popen(crackerPath, "r"))) {
+		fprintf(stderr, "Can't get benchmark: %s\n", crackerPath);
 		exit(1);
 	}
 	while (fgets(benchStr, sizeof(benchStr) - 1, benchStream) != NULL) {
@@ -539,6 +538,8 @@ void chkPlatform(void) {
 	if (!jsonBuf)
 		exit(1);
 
+	char defaultCracker[50], crackerPath[PATH_MAX + 1];
+
 	jsonBuf = jsonBuf->child;
 	while (jsonBuf) { // For each active platform
 		jsonBufTemp = getJsonObject(jsonBuf, "active",
@@ -552,33 +553,46 @@ void chkPlatform(void) {
 		jsonBufTemp = getJsonObject(jsonBuf, "id",
 				"'id' not found in 'platform' in config file!");
 		if (jsonBufTemp) {
-			// Check default vendor file
-			if (chkVendor(VENDOR_CRACKER, "hashcat", jsonBufTemp->valuestring)
-					> 0) {
-				cJSON_Delete(jsonBuf);
-				exit(1);
+			defaultCracker[0] = '\0';
+
+			if (strncmp(jsonBufTemp->valuestring, "cpu", 3) == 0) { // CPU
+				strncpy(defaultCracker, "hashcat", 7);
+			} else if (strncmp(jsonBufTemp->valuestring, "gpu", 3) == 0) { // GPU
+				if (strstr(jsonBufTemp->valuestring, "_amd")) { // AMD
+					strncpy(defaultCracker, "oclHashcat", 10);
+				} else if (strstr(jsonBufTemp->valuestring, "_nv")) { // Nvidia
+					strncpy(defaultCracker, "cudaHashcat", 11);
+				}
 			}
 
-			// Update benchmark
-			char vendorPath[PATH_MAX + 1];
-			strcpy(vendorPath, currentPath);
-			strcat(vendorPath, "vendor");
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, VENDOR_CRACKER);
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, "hashcat");
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, jsonBufTemp->valuestring);
-			strcat(vendorPath, PATH_SEPARATOR);
-			strcat(vendorPath, jsonBufTemp->valuestring);
+			if (strlen(defaultCracker) > 0) {
+				// Check default vendor file
+				if (chkVendor(VENDOR_CRACKER, defaultCracker,
+						jsonBufTemp->valuestring) > 0) {
+					cJSON_Delete(jsonBuf);
+					exit(1);
+				}
 
-			jsonBufTemp = getJsonObject(jsonBuf, "benchmark", NULL);
-			if (jsonBufTemp) { // benchmark option exists in platform in config file
-				cJSON_ReplaceItemInObject(jsonBuf, "benchmark",
-						cJSON_CreateNumber(getBenchCpu(vendorPath)));
-			} else { // benchmark option does not exist in platform in config file
-				cJSON_AddItemToObject(jsonBuf, "benchmark",
-						cJSON_CreateNumber(getBenchCpu(vendorPath)));
+				// Update benchmark
+				strcpy(crackerPath, currentPath);
+				strcat(crackerPath, "vendor");
+				strcat(crackerPath, PATH_SEPARATOR);
+				strcat(crackerPath, VENDOR_CRACKER);
+				strcat(crackerPath, PATH_SEPARATOR);
+				strcat(crackerPath, defaultCracker);
+				strcat(crackerPath, PATH_SEPARATOR);
+				strcat(crackerPath, jsonBufTemp->valuestring);
+				strcat(crackerPath, PATH_SEPARATOR);
+				strcat(crackerPath, jsonBufTemp->valuestring);
+
+				jsonBufTemp = getJsonObject(jsonBuf, "benchmark", NULL);
+				if (jsonBufTemp) { // benchmark option exists in platform in config file
+					cJSON_ReplaceItemInObject(jsonBuf, "benchmark",
+							cJSON_CreateNumber(getBenchCracker(crackerPath)));
+				} else { // benchmark option does not exist in platform in config file
+					cJSON_AddItemToObject(jsonBuf, "benchmark",
+							cJSON_CreateNumber(getBenchCracker(crackerPath)));
+				}
 			}
 		}
 
