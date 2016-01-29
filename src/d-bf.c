@@ -21,30 +21,29 @@
 #endif
 
 /* Perform OS specific tasks */
-#if defined(OS_WIN)
-/* It is windows */
+#if defined(OS_WIN) // It is windows
 #include <windows.h>
 #include <direct.h>
 #define WIN32_LEAN_AND_MEAN
 #define PATH_SEPARATOR "\\"
 #define OS_NAME "win"
-
-#else
-/* It is not windows */
+#else // It is not windows
 #include <unistd.h>
 #include <libgen.h>
 #define PATH_SEPARATOR "/"
-
 #endif
 
-#if defined(OS_LINUX)
-/* It is linux */
+#if defined(OS_LINUX) // It is linux
 #define OS_NAME "linux"
-
-#elif defined(OS_MAC)
-/* It is mac */
+#elif defined(OS_MAC) // It is mac
 #define OS_NAME "mac"
+#endif
 
+#if !defined(PATH_MAX) && defined(MAX_PATH)
+#define PATH_MAX = MAX_PATH
+#endif
+#if !defined(PATH_MAX)
+#define PATH_MAX = 4096
 #endif
 
 /* Constants */
