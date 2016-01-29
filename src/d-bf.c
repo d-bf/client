@@ -24,6 +24,7 @@
 #if defined(OS_WIN)
 /* It is windows */
 #include <windows.h>
+#include <direct.h>
 #define WIN32_LEAN_AND_MEAN
 #define PATH_SEPARATOR "\\"
 #define OS_NAME "win"
@@ -175,7 +176,7 @@ void clearScreen(void) {
 
 void sleepSec(int seconds) {
 #if defined(OS_WIN)
-	sleep(seconds * 1000);
+	Sleep(seconds * 1000);
 #else
 	sleep(seconds);
 #endif
@@ -204,8 +205,13 @@ char *strReplace(char *str, char *find, char *rep) {
 }
 
 char *getDirName(char *path) {
+#if defined(OS_WIN)
+	*(strrchr(path, '\\') + 1) = '\0';
+	return path;
+#else
 	dirname(path);
 	return path;
+#endif
 }
 
 int dirExists(const char *path) {
@@ -232,10 +238,16 @@ void mkdirRecursive(char *path) {
 
 	fullpath = strdup(path);
 	subpath = strdup(path);
-	dirname(subpath);
+	strcpy(subpath, getDirName(subpath));
 	if (strlen(subpath) > 1)
 		mkdirRecursive(subpath);
+
+#if defined(OS_WIN)
+	mkdir(fullpath);
+#else
 	mkdir(fullpath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+#endif
+
 	free(fullpath);
 }
 
@@ -273,7 +285,8 @@ int fileCopy(const char *sourceFilePath, const char *targetFilePath) {
 	}
 
 	char *targetDirName = strdup(targetFilePath);
-	mkdirRecursive(dirname(targetDirName));
+	strcpy(targetDirName, getDirName(targetDirName));
+	mkdirRecursive(targetDirName);
 	free(targetDirName);
 	targetStream = fopen(targetFilePath, "wb");
 	if (!targetStream) {
@@ -293,10 +306,14 @@ int fileCopy(const char *sourceFilePath, const char *targetFilePath) {
 }
 
 void setCurrentPath(void) {
-	// Linux
+#if defined(OS_WIN)
+	GetModuleFileName(NULL, currentPath, PATH_MAX);
+	strcat(currentPath, PATH_SEPARATOR);
+#else
 	readlink("/proc/self/exe", currentPath, PATH_MAX);
 	dirname(currentPath);
-	strcat(currentPath, "/");
+	strcat(currentPath, PATH_SEPARATOR);
+#endif
 }
 
 void chkConfigs(void) {
