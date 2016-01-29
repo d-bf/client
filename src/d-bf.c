@@ -22,11 +22,11 @@
 
 /* Perform OS specific tasks */
 #if defined(OS_WIN) // It is windows
+#define OS_NAME "win"
 #include <windows.h>
 #include <direct.h>
 #define WIN32_LEAN_AND_MEAN
 #define PATH_SEPARATOR "\\"
-#define OS_NAME "win"
 #else // It is not windows
 #include <unistd.h>
 #include <libgen.h>
@@ -35,15 +35,16 @@
 
 #if defined(OS_LINUX) // It is linux
 #define OS_NAME "linux"
+#include <linux/limits.h>
 #elif defined(OS_MAC) // It is mac
 #define OS_NAME "mac"
 #endif
 
 #if !defined(PATH_MAX) && defined(MAX_PATH)
-#define PATH_MAX = MAX_PATH
+#define PATH_MAX MAX_PATH
 #endif
 #if !defined(PATH_MAX)
-#define PATH_MAX = 4096
+#define PATH_MAX 4096
 #endif
 
 /* Constants */
@@ -187,7 +188,7 @@ char *strReplace(char *str, char *find, char *rep) {
 	char *p;
 
 	strncpy(strToReplace, str, 4095);
-	strToReplace[4096] = '\0';
+	strToReplace[4095] = '\0';
 	strncpy(strReplaced, strToReplace, 4096);
 
 	while ((p = strstr(strToReplace, find))) {
@@ -755,7 +756,7 @@ int doCrack(const char *crackInfoPath, cJSON **taskInfo) {
 						"'platform' not found in response of get task!");
 				if (jsonBufTemp) {
 					strncpy(platformId, jsonBufTemp->valuestring, 19);
-					platformId[20] = '\0';
+					platformId[19] = '\0';
 					cJSON_DeleteItemFromObject(*taskInfo, "platform"); // Delete platform, preparing taskInfo to send back to server
 				} else {
 					cJSON_Delete(crackInfo);
@@ -994,7 +995,7 @@ int sendRequest(int reqType, cJSON *data) {
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, sslVerify);
 
 		// Set post data
-		char *strBuf;
+		char *strBuf = NULL;
 
 		if (data) { // If the input json is valid
 			strBuf = cJSON_PrintUnformatted(data);
