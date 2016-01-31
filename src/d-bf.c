@@ -308,7 +308,7 @@ int fileCopy(const char *sourceFilePath, const char *targetFilePath) {
 void setCurrentPath(void) {
 #if defined(OS_WIN)
 	GetModuleFileName(NULL, currentPath, PATH_MAX);
-	strcat(currentPath, PATH_SEPARATOR);
+	strcpy(currentPath, getDirName(currentPath));
 #else
 	readlink("/proc/self/exe", currentPath, PATH_MAX);
 	dirname(currentPath);
@@ -334,7 +334,7 @@ void chkConfigs(void) {
 		FILE *configFile;
 		configFile = fopen(configFilePath, "wb");
 		if (!configFile) {
-			fprintf(stderr, "Can not create config file!\n");
+			fprintf(stderr, "Can not create config file: %s\n", configFilePath);
 			exit(1);
 		}
 
