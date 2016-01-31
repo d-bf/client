@@ -12,16 +12,16 @@
 #include "./lib/base64/base64.h"
 
 /* Determine OS */
-#if defined(_WIN32) || defined(_WIN64)
-#define OS_WIN
-#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__linux__)
+#if defined(WINDOWS) || defined(_WIN32) || defined(_WIN64)
+#define OS_WINDOWS
+#elif defined(LINUX) || defined(unix) || defined(__unix) || defined(__unix__) || defined(__linux__)
 #define OS_LINUX
-#elif defined(__APPLE__) || defined(__MACH__)
+#elif defined(OSX) || defined(__APPLE__) || defined(__MACH__)
 #define OS_MAC
 #endif
 
 /* Perform OS specific tasks */
-#if defined(OS_WIN) // It is windows
+#if defined(OS_WINDOWS) // It is windows
 #define OS_NAME "win"
 #include <windows.h>
 #include <direct.h>
@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
 /* Functions definition */
 
 void clearScreen(void) {
-#if defined(OS_WIN)
+#if defined(OS_WINDOWS)
 	system("cls");
 #else
 	system("clear");
@@ -175,7 +175,7 @@ void clearScreen(void) {
 }
 
 void sleepSec(int seconds) {
-#if defined(OS_WIN)
+#if defined(OS_WINDOWS)
 	Sleep(seconds * 1000);
 #else
 	sleep(seconds);
@@ -205,7 +205,7 @@ char *strReplace(char *str, char *find, char *rep) {
 }
 
 char *getDirName(char *path) {
-#if defined(OS_WIN)
+#if defined(OS_WINDOWS)
 	*(strrchr(path, '\\') + 1) = '\0';
 	return path;
 #else
@@ -242,7 +242,7 @@ void mkdirRecursive(char *path) {
 	if (strlen(subpath) > 1)
 		mkdirRecursive(subpath);
 
-#if defined(OS_WIN)
+#if defined(OS_WINDOWS)
 	mkdir(fullpath);
 #else
 	mkdir(fullpath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -306,7 +306,7 @@ int fileCopy(const char *sourceFilePath, const char *targetFilePath) {
 }
 
 void setCurrentPath(void) {
-#if defined(OS_WIN)
+#if defined(OS_WINDOWS)
 	GetModuleFileName(NULL, currentPath, PATH_MAX);
 	strcpy(currentPath, getDirName(currentPath));
 #else
