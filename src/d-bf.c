@@ -187,9 +187,8 @@ char *strReplace(char *str, char *find, char *rep) {
 	static char strToReplace[4096];
 	char *p;
 
-	strncpy(strToReplace, str, 4095);
-	strToReplace[4095] = '\0';
-	strncpy(strReplaced, strToReplace, 4096);
+	strncpy(strToReplace, str, strlen(str));
+	strncpy(strReplaced, strToReplace, strlen(strToReplace));
 
 	while ((p = strstr(strToReplace, find))) {
 		strncpy(strReplaced, strToReplace, p - strToReplace); // Copy characters from 'str' start to 'find' start
@@ -198,7 +197,7 @@ char *strReplace(char *str, char *find, char *rep) {
 		sprintf(strReplaced + (p - strToReplace), "%s%s", rep,
 				p + strlen(find));
 
-		strncpy(strToReplace, strReplaced, 4096);
+		strncpy(strToReplace, strReplaced, strlen(strReplaced));
 	}
 
 	return strReplaced;
@@ -249,6 +248,7 @@ void mkdirRecursive(char *path) {
 #endif
 
 	free(fullpath);
+	free(subpath);
 }
 
 long int fileGetContents(char **contents, const char *path,
@@ -289,15 +289,13 @@ int fileCopy(const char *sourceFilePath, const char *targetFilePath) {
 	mkdirRecursive(targetDirName);
 	free(targetDirName);
 	targetStream = fopen(targetFilePath, "wb");
-	if (!targetStream) {
-		fclose(sourceStream);
+	if (targetStream) {
+		int ch;
+		while ((ch = fgetc(sourceStream)) != EOF)
+			fputc(ch, targetStream);
+	} else {
 		fprintf(stderr, "Can't write file: %s\n", targetFilePath);
 	}
-
-	int ch;
-
-	while ((ch = fgetc(sourceStream)) != EOF)
-		fputc(ch, targetStream);
 
 	fclose(sourceStream);
 	fclose(targetStream);
