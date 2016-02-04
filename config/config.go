@@ -20,7 +20,7 @@ func init() {
 		CurrentPath += string(os.PathSeparator)
 	} else {
 		dbf.Log.Printf("%s\n", err)
-		os.Exit(1)
+		panic(1)
 	}
 }
 
@@ -31,11 +31,11 @@ func Check() {
 		if os.IsNotExist(err) { // Does not exist, so create it
 			if err = os.MkdirAll(confPath, 0775); err != nil {
 				dbf.Log.Printf("Error 2.2: %s\n", err) // Error in creating
-				os.Exit(1)
+				panic(1)
 			}
 		} else {
 			dbf.Log.Printf("%s\n", err) // Error in accessing
-			os.Exit(1)
+			panic(1)
 		}
 	}
 
@@ -47,16 +47,16 @@ func Check() {
 			err = createDbfConf()
 			if err == nil {
 				fmt.Printf("Please enter server's URL in url_api in config file: %s\n", confPath)
-				os.Exit(0)
+				panic(0)
 			} else {
 				dbf.Log.Printf("%s\n", err)
-				os.Exit(1)
+				panic(1)
 			}
 		} else {
 			dbf.Log.Printf("%s\n", err) // Error in accessing
-			os.Exit(1)
+			panic(1)
 		}
 	} else {
-		// Sync dbf config
+		// Sync config file
 	}
 }

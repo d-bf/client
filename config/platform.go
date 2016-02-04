@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/d-bf/client/dbf"
-	"os"
 	"runtime"
 )
 
@@ -19,7 +18,7 @@ func init() {
 		basePlatform = "mac"
 	default:
 		dbf.Log.Printf("The operating system '%s' is not supported!\n", runtime.GOOS)
-		os.Exit(1)
+		panic(1)
 	}
 	switch runtime.GOARCH { // Set Arch
 	case "386":
@@ -32,7 +31,7 @@ func init() {
 		//		basePlatform += "_arm64"
 	default:
 		dbf.Log.Printf("The architecture '%s' is not supported in operating system '%s'!\n", runtime.GOARCH, runtime.GOOS)
-		os.Exit(1)
+		panic(1)
 	}
 }
 
