@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"github.com/d-bf/client/dbf"
 	"os"
 	"path/filepath"
@@ -43,7 +44,14 @@ func Check() {
 	if _, err := os.Stat(confPath); err != nil {
 		if os.IsNotExist(err) { // Does not exist, so create it
 			// Create initial config file
-			createDbfConf()
+			err = createDbfConf()
+			if err == nil {
+				fmt.Printf("Please enter server's URL in url_api in config file: %s\n", confPath)
+				os.Exit(0)
+			} else {
+				dbf.Log.Printf("%s\n", err)
+				os.Exit(1)
+			}
 		} else {
 			dbf.Log.Printf("%s\n", err) // Error in accessing
 			os.Exit(1)
