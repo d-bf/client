@@ -6,17 +6,17 @@ import (
 )
 
 type DbfConf struct {
-	Server   dbfConfServer     `json:"server"`
-	Platform []dbfConfPlatform `json:"platform"`
+	Server   DbfConfServer     `json:"server"`
+	Platform []DbfConfPlatform `json:"platform"`
 }
 
-type dbfConfServer struct {
+type DbfConfServer struct {
 	Url_api    string `json:"url_api"`
 	Version    string `json:"version"`
 	Ssl_verify int    `json:"ssl_verify"`
 }
 
-type dbfConfPlatform struct {
+type DbfConfPlatform struct {
 	Id        string `json:"id"`
 	Active    int    `json:"active"`
 	Benchmark int    `json:"benchmark"`
@@ -24,7 +24,7 @@ type dbfConfPlatform struct {
 
 func createDbfConf() error {
 	dbfConf := DbfConf{
-		Server: dbfConfServer{
+		Server: DbfConfServer{
 			Url_api:    "",
 			Version:    "v1",
 			Ssl_verify: 0,

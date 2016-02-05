@@ -43,25 +43,25 @@ type dbfConfPlatform struct {
 }
 */
 
-func createPlatforms() []dbfConfPlatform {
-	platform := make([]dbfConfPlatform, 3)
+func createPlatforms() []DbfConfPlatform {
+	platform := make([]DbfConfPlatform, 3)
 
 	// CPU
-	platform[0] = dbfConfPlatform{
+	platform[0] = DbfConfPlatform{
 		Id:        "cpu_" + basePlatform,
 		Active:    1,
 		Benchmark: 0,
 	}
 
 	// GPU AMD
-	platform[1] = dbfConfPlatform{
+	platform[1] = DbfConfPlatform{
 		Id:        "gpu_" + basePlatform + "_amd",
 		Active:    0,
 		Benchmark: 0,
 	}
 
 	// GPU Nvidia
-	platform[2] = dbfConfPlatform{
+	platform[2] = DbfConfPlatform{
 		Id:        "gpu_" + basePlatform + "_nv",
 		Active:    0,
 		Benchmark: 0,
