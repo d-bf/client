@@ -7,6 +7,6 @@ import (
 
 var Log *log.Logger
 
-func init() {
+func Init() {
 	Log = log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile)
 }

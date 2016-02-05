@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/d-bf/client/config"
+	"github.com/d-bf/client/dbf"
+	"github.com/d-bf/client/server"
 	"github.com/d-bf/client/term"
 	"os"
 )
@@ -14,14 +16,21 @@ func deferPanic() {
 	}
 }
 
-func init() {
+func initialize() {
 	defer deferPanic()
 
+	dbf.Init()
+	config.Init()
 	config.Check()
+	server.Init()
 }
 
 func main() {
 	defer deferPanic()
 
+	initialize()
+
 	term.Clear()
+
+	server.GetVendor("cracker", "hashcat", "cpu_linux_64")
 }
