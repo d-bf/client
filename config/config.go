@@ -3,8 +3,19 @@ package config
 import (
 	"fmt"
 	"github.com/d-bf/client/dbf"
+	"github.com/d-bf/client/server"
 	"os"
 	"path/filepath"
+	"strings"
+)
+
+const (
+	_BENCH_TYPE_CPU     = 0
+	_BENCH_TYPE_GPU_AMD = 1
+	_BENCH_TYPE_GPU_NV  = 2
+
+	VENDOR_TYPE_GENERATOR = "generator"
+	VENDOR_TYPE_CRACKER   = "cracker"
 )
 
 var (
@@ -35,22 +46,6 @@ func Init() {
 	pathConfFile = pathConfDir + "dbf.json"
 	PathVendor = PathCurrent + "vendor" + string(os.PathSeparator)
 	PathCrack = PathCurrent + "crack" + string(os.PathSeparator)
-}
-
-func checkDir(path string) error {
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) { // Does not exist, so create it
-			if err = os.MkdirAll(path, 0775); err != nil {
-				dbf.Log.Printf("%s\n", err) // Error in creating
-				return err
-			}
-		} else {
-			dbf.Log.Printf("%s\n", err) // Error in accessing
-			return err
-		}
-	}
-
-	return nil
 }
 
 func Check() {
@@ -93,7 +88,61 @@ func Check() {
 
 		// Check default vendor files
 		for _, platform := range *DbfConfig.Platform {
-			_ = platform.Id
+			if strings.HasPrefix(platform.Id, "cpu") { // CPU
+				if platform.Active != 0 { // Is active
+					getBench(_BENCH_TYPE_CPU, &platform.Id)
+				}
+			} else if strings.HasSuffix(platform.Id, "_amd") { // GPU AMD
+				if platform.Active != 0 { // Is active
+					getBench(_BENCH_TYPE_GPU_AMD, &platform.Id)
+				}
+			} else if strings.HasSuffix(platform.Id, "_nv") { // GPU Nvidia
+				if platform.Active != 0 { // Is active
+					getBench(_BENCH_TYPE_GPU_NV, &platform.Id)
+				}
+			}
 		}
 	}
+}
+
+func checkDir(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) { // Does not exist, so create it
+			if err = os.MkdirAll(path, 0775); err != nil {
+				dbf.Log.Printf("%s\n", err) // Error in creating
+				return err
+			}
+		} else {
+			dbf.Log.Printf("%s\n", err) // Error in accessing
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getBench(benchType int, platformId *string) {
+	checkBenchVendor(&benchType, platformId)
+}
+
+func checkBenchVendor(benchType *int, platformId *string) bool {
+	var benchVendor string
+	switch *benchType {
+	case _BENCH_TYPE_CPU:
+		benchVendor = "hashcat"
+	case _BENCH_TYPE_GPU_AMD:
+		benchVendor = "oclHashcat"
+	case _BENCH_TYPE_GPU_NV:
+		benchVendor = "cudaHashcat"
+	default:
+		return false
+	}
+
+	pathBenchVendor := PathVendor + "cracker" + string(os.PathSeparator) + benchVendor + string(os.PathSeparator) + *platformId + string(os.PathSeparator) + *platformId
+
+	if _, err := os.Stat(pathBenchVendor); os.IsNotExist(err) {
+		server.GetVendor(&VENDOR_TYPE_CRACKER, &benchVendor, &platformId)
+	}
+
+	return true
 }

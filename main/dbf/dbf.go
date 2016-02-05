@@ -31,6 +31,4 @@ func main() {
 	initialize()
 
 	term.Clear()
-
-	server.GetVendor("cracker", "hashcat", "cpu_linux_64")
 }

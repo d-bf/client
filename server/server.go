@@ -32,8 +32,8 @@ func setDefaultHeader(req *http.Request) {
 	req.Header.Set("Accept", "application/json")
 }
 
-func GetVendor(vendorType string, vendorName string, platform string) bool {
-	reqJsonStr := "{\"vendor_type\":\"" + vendorType + "\",\"name\":\"" + vendorName + "\",\"platform_id\":\"" + platform + "\"}"
+func GetVendor(vendorType string, vendorName *string, platform *string) bool {
+	reqJsonStr := "{\"vendor_type\":\"" + vendorType + "\",\"name\":\"" + *vendorName + "\",\"platform_id\":\"" + *platform + "\"}"
 	reqJsonByte, err := json.Marshal(reqJsonStr)
 	if err != nil {
 		dbf.Log.Printf("%s\n", err)
