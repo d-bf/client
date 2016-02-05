@@ -58,5 +58,6 @@ func Check() {
 		}
 	} else {
 		// Sync config file
+//		dbfConf := readDbfConf()
 	}
 }

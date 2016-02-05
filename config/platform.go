@@ -43,7 +43,7 @@ type dbfConfPlatform struct {
 }
 */
 
-func createPlatforms() []DbfConfPlatform {
+func createPlatforms() *[]DbfConfPlatform {
 	platform := make([]DbfConfPlatform, 3)
 
 	// CPU
@@ -67,5 +67,5 @@ func createPlatforms() []DbfConfPlatform {
 		Benchmark: 0,
 	}
 
-	return platform
+	return &platform
 }
