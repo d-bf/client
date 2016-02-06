@@ -126,17 +126,9 @@ func check() {
 }
 
 func getBench(benchType int, platformId *string) int {
-	if checkVendorBench(&benchType, platformId) {
-		return 1
-	} else {
-		return 0
-	}
-}
-
-func checkVendorBench(benchType *int, platformId *string) bool {
+	// Check vendor file
 	var vendorBench string
-
-	switch *benchType {
+	switch benchType {
 	case _BENCH_TYPE_CPU:
 		vendorBench = "hashcat"
 	case _BENCH_TYPE_GPU_AMD:
@@ -144,7 +136,7 @@ func checkVendorBench(benchType *int, platformId *string) bool {
 	case _BENCH_TYPE_GPU_NV:
 		vendorBench = "cudaHashcat"
 	default:
-		return false
+		return 0
 	}
 
 	pathVendorBench := pathVendor + "cracker" + string(os.PathSeparator) + vendorBench + string(os.PathSeparator) + *platformId + string(os.PathSeparator)
@@ -156,8 +148,11 @@ func checkVendorBench(benchType *int, platformId *string) bool {
 	pathVendorBench += *platformId
 
 	if _, err := os.Stat(pathVendorBench); os.IsNotExist(err) {
-		return getVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &pathVendorBench)
+		if getVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &pathVendorBench) == false {
+			return 0
+		}
 	}
 
-	return true
+	// Preform benchmark
+	return 1
 }
