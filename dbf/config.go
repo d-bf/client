@@ -103,27 +103,34 @@ func check() {
 
 		initServer()
 
-		// Check default vendor files
-		for _, platform := range *confDbf.Platform {
+		// Check default vendor files and update benchmarks
+		for i, platform := range *confDbf.Platform {
 			if strings.HasPrefix(platform.Id, "cpu") { // CPU
 				if platform.Active != 0 { // Is active
-					getBench(_BENCH_TYPE_CPU, &platform.Id)
+					(*confDbf.Platform)[i].Benchmark = getBench(_BENCH_TYPE_CPU, &platform.Id)
 				}
 			} else if strings.HasSuffix(platform.Id, "_amd") { // GPU AMD
 				if platform.Active != 0 { // Is active
-					getBench(_BENCH_TYPE_GPU_AMD, &platform.Id)
+					(*confDbf.Platform)[i].Benchmark = getBench(_BENCH_TYPE_GPU_AMD, &platform.Id)
 				}
 			} else if strings.HasSuffix(platform.Id, "_nv") { // GPU Nvidia
 				if platform.Active != 0 { // Is active
-					getBench(_BENCH_TYPE_GPU_NV, &platform.Id)
+					(*confDbf.Platform)[i].Benchmark = getBench(_BENCH_TYPE_GPU_NV, &platform.Id)
 				}
 			}
 		}
+
+		// Update config file
+		saveConfDbf(confDbf)
 	}
 }
 
-func getBench(benchType int, platformId *string) {
-	checkVendorBench(&benchType, platformId)
+func getBench(benchType int, platformId *string) int {
+	if checkVendorBench(&benchType, platformId) {
+		return 1
+	} else {
+		return 0
+	}
 }
 
 func checkVendorBench(benchType *int, platformId *string) bool {
