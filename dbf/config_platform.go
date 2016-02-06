@@ -1,13 +1,12 @@
-package config
+package dbf
 
 import (
-	"github.com/d-bf/client/dbf"
 	"runtime"
 )
 
 var basePlatform string
 
-func init() {
+func initConfigPlatform() {
 	// Set base platform
 	switch runtime.GOOS { // Set OS
 	case "linux":
@@ -17,7 +16,7 @@ func init() {
 	case "darwin":
 		basePlatform = "mac"
 	default:
-		dbf.Log.Printf("The operating system '%s' is not supported!\n", runtime.GOOS)
+		Log.Printf("The operating system '%s' is not supported!\n", runtime.GOOS)
 		panic(1)
 	}
 	switch runtime.GOARCH { // Set Arch
@@ -30,20 +29,12 @@ func init() {
 		//	case "arm64":
 		//		basePlatform += "_arm64"
 	default:
-		dbf.Log.Printf("The architecture '%s' is not supported in operating system '%s'!\n", runtime.GOARCH, runtime.GOOS)
+		Log.Printf("The architecture '%s' is not supported in operating system '%s'!\n", runtime.GOARCH, runtime.GOOS)
 		panic(1)
 	}
 }
 
-/*
-type dbfConfPlatform struct {
-	Id        string `json:"id"`
-	Active    int    `json:"active"`
-	Benchmark int    `json:"benchmark"`
-}
-*/
-
-func createPlatforms() *[]DbfConfPlatform {
+func createPlatform() *[]DbfConfPlatform {
 	platform := make([]DbfConfPlatform, 3)
 
 	// CPU

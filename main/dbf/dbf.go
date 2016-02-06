@@ -1,9 +1,7 @@
 package main
 
 import (
-	"github.com/d-bf/client/config"
 	"github.com/d-bf/client/dbf"
-	"github.com/d-bf/client/server"
 	"github.com/d-bf/client/term"
 	"os"
 )
@@ -17,12 +15,8 @@ func deferPanic() {
 }
 
 func initialize() {
-	defer deferPanic()
-
-	dbf.Init()
-	config.Init()
-	config.Check()
-	server.Init()
+	dbf.InitLog()
+	dbf.InitConfig()
 }
 
 func main() {

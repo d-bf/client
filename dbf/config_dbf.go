@@ -1,12 +1,11 @@
-package config
+package dbf
 
 import (
 	"encoding/json"
-	"github.com/d-bf/client/dbf"
 	"io/ioutil"
 )
 
-type DbfConf struct {
+type ConfigDbf struct {
 	Server   *DbfConfServer     `json:"server"`
 	Platform *[]DbfConfPlatform `json:"platform"`
 }
@@ -23,39 +22,39 @@ type DbfConfPlatform struct {
 	Benchmark int    `json:"benchmark"`
 }
 
-func createDbfConf() error {
-	dbfConf := DbfConf{
+func createConfDbf() error {
+	ConfDbf := ConfigDbf{
 		Server: &DbfConfServer{
 			Url_api:    "",
 			Version:    "v1",
 			Ssl_verify: 0,
 		},
-		Platform: createPlatforms(),
+		Platform: createPlatform(),
 	}
 
-	jsonDbfConf, err := json.MarshalIndent(&dbfConf, "", "\t")
+	confDbfJson, err := json.MarshalIndent(&ConfDbf, "", "\t")
 	if err == nil {
-		err = ioutil.WriteFile(pathConfFile, jsonDbfConf, 0644)
+		err = ioutil.WriteFile(pathConfFile, confDbfJson, 0664)
 		return err
 	} else {
 		return err
 	}
 }
 
-func readDbfConf() *DbfConf {
-	jsonConfig, err := ioutil.ReadFile(pathConfFile)
+func readConfDbf() *ConfigDbf {
+	confDbfJson, err := ioutil.ReadFile(pathConfFile)
 	if err != nil {
-		dbf.Log.Printf("%s\n", err)
+		Log.Printf("%s\n", err)
 		panic(1)
 	}
 
-	var dbfConf DbfConf
+	var confDbf ConfigDbf
 
-	err = json.Unmarshal(jsonConfig, &dbfConf)
+	err = json.Unmarshal(confDbfJson, &confDbf)
 	if err != nil {
-		dbf.Log.Printf("%s\n", err)
+		Log.Printf("%s\n", err)
 		panic(1)
 	}
 
-	return &dbfConf
+	return &confDbf
 }
