@@ -1,12 +1,11 @@
 package dbf
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	//	"bytes"
 	"strings"
 )
 
@@ -159,21 +158,35 @@ func getBench(benchType int, platformId *string) int {
 	// Preform benchmark
 	cmd := exec.Command(pathVendorBench, "-b", "-m 0")
 
-	//	var cmdOut, cmdErr bytes.Buffer
-	//	cmd.Stdout = &cmdOut
-	//	cmd.Stderr = &cmdErr
-	//	cmd.Run()
-	//	fmt.Printf("STDOUT: %s\n", cmd.Stdout)
-	//	fmt.Printf("STDERR: %s\n", cmd.Stderr)
+	cmdOut, err := cmd.StdoutPipe()
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return 0
+	}
 
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-	cmd.Start()
-	b, _ := ioutil.ReadAll(stdout)
-	fmt.Printf("STDOUT: %s\n", string(b))
-	b, _ = ioutil.ReadAll(stderr)
-	fmt.Printf("STDERR: %s\n", string(b))
-	cmd.Wait()
+	err = cmd.Start()
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return 0
+	}
 
-	return 1
+	cmdScanner := bufio.NewScanner(cmdOut)
+	cmdScanner.Split(bufio.ScanLines)
+	for cmdScanner.Scan() {
+		// Get benchmark here
+		fmt.Println(cmdScanner.Text())
+	}
+
+	if err = cmdScanner.Err(); err != nil {
+		Log.Printf("%s\n", err)
+		return 0
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return 0
+	}
+
+	return 0
 }
