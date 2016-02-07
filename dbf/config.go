@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -129,14 +130,17 @@ func check() {
 
 func getBench(benchType int, platformId *string) int {
 	// Check vendor file
-	var vendorBench string
+	var vendorBench, benchLinePrefix string
 	switch benchType {
 	case _BENCH_TYPE_CPU:
 		vendorBench = "hashcat"
+		benchLinePrefix = "Speed/sec:"
 	case _BENCH_TYPE_GPU_AMD:
 		vendorBench = "oclHashcat"
+		benchLinePrefix = "Speed.GPU.#"
 	case _BENCH_TYPE_GPU_NV:
 		vendorBench = "cudaHashcat"
+		benchLinePrefix = "Speed.GPU.#"
 	default:
 		return 0
 	}
@@ -170,11 +174,19 @@ func getBench(benchType int, platformId *string) int {
 		return 0
 	}
 
+	re, err := regexp.Compile("\\d+\\.{0,1}\\d+[A-Za-z]?")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return 0
+	}
+
 	cmdScanner := bufio.NewScanner(cmdOut)
 	cmdScanner.Split(bufio.ScanLines)
 	for cmdScanner.Scan() {
-		// Get benchmark here
-		fmt.Println(cmdScanner.Text())
+		// Get benchmark from line
+		if strings.HasPrefix(cmdScanner.Text(), benchLinePrefix) {
+			fmt.Printf("%s\n", re.FindString(strings.Replace(strings.SplitN(cmdScanner.Text(), ":", 2)[1], " ", "", -1)))
+		}
 	}
 
 	if err = cmdScanner.Err(); err != nil {
