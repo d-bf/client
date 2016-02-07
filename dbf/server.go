@@ -3,7 +3,6 @@ package dbf
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -30,12 +29,7 @@ func setDefaultHeader(req *http.Request) {
 }
 
 func getVendor(vendorType string, vendorName *string, platformId *string, vendorPath *string) bool {
-	reqJsonStr := "{\"vendor_type\":\"" + vendorType + "\",\"name\":\"" + *vendorName + "\",\"platform_id\":\"" + *platformId + "\"}"
-	reqJsonByte, err := json.Marshal(reqJsonStr)
-	if err != nil {
-		Log.Printf("%s\n", err)
-		return false
-	}
+	reqJsonByte := []byte(`{"vendor_type":"` + vendorType + `","name":"` + *vendorName + `","platform_id":"` + *platformId + `"}`)
 
 	req, err := http.NewRequest("POST", serverUrl+_URL_GET_VENDOR, bytes.NewBuffer(reqJsonByte))
 	if err != nil {
