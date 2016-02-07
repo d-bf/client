@@ -3,7 +3,6 @@ package dbf
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -26,7 +25,6 @@ func initServer() {
 
 func setDefaultHeader(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
 }
 
 func getVendor(vendorType string, vendorName *string, platformId *string, vendorPath *string) bool {
@@ -44,6 +42,7 @@ func getVendor(vendorType string, vendorName *string, platformId *string, vendor
 	}
 
 	setDefaultHeader(req)
+	req.Header.Set("Accept", "application/octet-stream")
 
 	resp, err := client.Do(req)
 	defer resp.Body.Close()
@@ -52,8 +51,10 @@ func getVendor(vendorType string, vendorName *string, platformId *string, vendor
 		return false
 	}
 
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
+	if resp.StatusCode != http.StatusOK {
+		Log.Printf("Bad response from server:\nStatus: %s\n Headers: %s\n", resp.Status, resp.Header)
+		return false		
+	}
 
 	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0774)
 	defer vendorFile.Close()
