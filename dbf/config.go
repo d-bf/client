@@ -2,9 +2,11 @@ package dbf
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	//	"bytes"
 	"strings"
 )
 
@@ -155,34 +157,23 @@ func getBench(benchType int, platformId *string) int {
 	}
 
 	// Preform benchmark
-	
-	/*
-	out, err := exec.Command(pathVendorBench, "-b -m 0").Output()
-	if err != nil {
-		Log.Fatal(err)
-	}
-	fmt.Printf("STDOUT: %s\n", out)
-	*/
-	
-	cmd := exec.Command(pathVendorBench, "-b -m 0")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		Log.Println("a")
-		Log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		Log.Println("b")
-		Log.Fatal(err)
-	}
-	
-	var b []byte
-	stdout.Read(b)
-	
-	if err := cmd.Wait(); err != nil {
-		Log.Println("c")
-		Log.Fatal(err)
-	}
-	fmt.Printf("STDOUT: %s\n", b)
-	
+	cmd := exec.Command(pathVendorBench, "-b", "-m 0")
+
+	//	var cmdOut, cmdErr bytes.Buffer
+	//	cmd.Stdout = &cmdOut
+	//	cmd.Stderr = &cmdErr
+	//	cmd.Run()
+	//	fmt.Printf("STDOUT: %s\n", cmd.Stdout)
+	//	fmt.Printf("STDERR: %s\n", cmd.Stderr)
+
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	cmd.Start()
+	b, _ := ioutil.ReadAll(stdout)
+	fmt.Printf("STDOUT: %s\n", string(b))
+	b, _ = ioutil.ReadAll(stderr)
+	fmt.Printf("STDERR: %s\n", string(b))
+	cmd.Wait()
+
 	return 1
 }
