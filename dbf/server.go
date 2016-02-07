@@ -2,6 +2,7 @@ package dbf
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ func initServer() {
 	client = &http.Client{
 		Transport: &http.Transport{
 			DisableCompression: false,
+			TLSClientConfig:    &tls.Config{InsecureSkipVerify: (confDbf.Server.Ssl_verify == 0)},
 		},
 	}
 
@@ -45,23 +47,23 @@ func getVendor(vendorType string, vendorName *string, platformId *string, vendor
 	req.Header.Set("Accept", "application/octet-stream")
 
 	resp, err := client.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		Log.Printf("Bad response from server:\nStatus: %s\n Headers: %s\n", resp.Status, resp.Header)
-		return false		
+		return false
 	}
 
 	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0774)
-	defer vendorFile.Close()
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false
 	}
+	defer vendorFile.Close()
 
 	_, err = io.Copy(vendorFile, resp.Body)
 	if err != nil {
