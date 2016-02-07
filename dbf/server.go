@@ -55,7 +55,7 @@ func getVendor(vendorType string, vendorName *string, platformId *string, vendor
 	fmt.Println("response Status:", resp.Status)
 	fmt.Println("response Headers:", resp.Header)
 
-	vendorFile, err := os.Create(*vendorPath + ".tmp")
+	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0774)
 	defer vendorFile.Close()
 	if err != nil {
 		Log.Printf("%s\n", err)
