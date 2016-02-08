@@ -54,23 +54,6 @@ func InitConfig() {
 	check()
 }
 
-// checkDir checks if dir exists and is accessible, otherwise tries to create it
-func checkDir(path string) error {
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) { // Does not exist, so create it
-			if err = os.MkdirAll(path, 0775); err != nil {
-				Log.Printf("%s\n", err) // Error in creating
-				return err
-			}
-		} else {
-			Log.Printf("%s\n", err) // Error in accessing
-			return err
-		}
-	}
-
-	return nil
-}
-
 func check() {
 	err := checkDir(pathConfDir)
 	if err != nil {
@@ -148,6 +131,23 @@ func check() {
 		// Update config file
 		saveConfDbf(confDbf)
 	}
+}
+
+// checkDir checks if dir exists and is accessible, otherwise tries to create it
+func checkDir(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) { // Does not exist, so create it
+			if err = os.MkdirAll(path, 0775); err != nil {
+				Log.Printf("%s\n", err) // Error in creating
+				return err
+			}
+		} else {
+			Log.Printf("%s\n", err) // Error in accessing
+			return err
+		}
+	}
+
+	return nil
 }
 
 func getBench(benchType int, platformId *string) uint64 {
