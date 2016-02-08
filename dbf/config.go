@@ -196,7 +196,7 @@ func getBench(benchType int, platformId *string) uint64 {
 		return 0
 	}
 
-	var bench, totalBench float64
+	var bench, totalBench uint64
 	numOfBench := 0
 
 	cmdScanner := bufio.NewScanner(cmdOut)
@@ -222,13 +222,13 @@ func getBench(benchType int, platformId *string) uint64 {
 	}
 
 	if numOfBench > 0 {
-		return uint64(math.Floor((totalBench / float64(numOfBench)) + 0.5))
+		return uint64(math.Floor(float64(totalBench/uint64(numOfBench)) + 0.5))
 	}
 
 	return 0
 }
 
-func getBenchValue(benchValue string) float64 {
+func getBenchValue(benchValue string) uint64 {
 	benchFloat, err := strconv.ParseFloat(regexpBenchFloat.FindString(benchValue), 64)
 	if err != nil {
 		Log.Printf("%s\n", err)
@@ -260,5 +260,5 @@ func getBenchValue(benchValue string) float64 {
 		benchFloat *= 1152921504606846976 // Yotta to Mega
 	}
 
-	return benchFloat
+	return uint64(math.Floor(benchFloat + 0.5))
 }
