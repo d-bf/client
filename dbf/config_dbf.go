@@ -19,7 +19,7 @@ type ConfDbfServer struct {
 type ConfDbfPlatform struct {
 	Id        string `json:"id"`
 	Active    int    `json:"active"`
-	Benchmark int    `json:"benchmark"`
+	Benchmark uint64 `json:"benchmark"`
 }
 
 func createConfDbf() error {

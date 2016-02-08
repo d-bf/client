@@ -3,10 +3,12 @@ package dbf
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -20,12 +22,15 @@ const (
 )
 
 var (
-	confDbf      *ConfigDbf
-	pathCurrent  string
-	pathConfDir  string
-	pathConfFile string
-	pathVendor   string
-	pathCrack    string
+	confDbf           *ConfigDbf
+	pathCurrent       string
+	pathConfDir       string
+	pathConfFile      string
+	pathVendor        string
+	pathCrack         string
+	regexpBenchValue  *regexp.Regexp
+	regexpBenchFloat  *regexp.Regexp
+	regexpBenchSuffix *regexp.Regexp
 )
 
 func InitConfig() {
@@ -106,6 +111,23 @@ func check() {
 
 		initServer()
 
+		// Init regexp
+		regexpBenchValue, err = regexp.Compile("\\d*\\.?\\d*[A-Za-z]?")
+		if err != nil {
+			Log.Printf("%s\n", err)
+			panic(1)
+		}
+		regexpBenchFloat, err = regexp.Compile("\\d*\\.?\\d*")
+		if err != nil {
+			Log.Printf("%s\n", err)
+			panic(1)
+		}
+		regexpBenchSuffix, err = regexp.Compile("[A-Za-z]$")
+		if err != nil {
+			Log.Printf("%s\n", err)
+			panic(1)
+		}
+
 		// Check default vendor files and update benchmarks
 		for i, platform := range *confDbf.Platform {
 			if strings.HasPrefix(platform.Id, "cpu") { // CPU
@@ -128,7 +150,7 @@ func check() {
 	}
 }
 
-func getBench(benchType int, platformId *string) int {
+func getBench(benchType int, platformId *string) uint64 {
 	// Check vendor file
 	var vendorBench, benchLinePrefix string
 	switch benchType {
@@ -174,19 +196,24 @@ func getBench(benchType int, platformId *string) int {
 		return 0
 	}
 
-	re, err := regexp.Compile("\\d+\\.{0,1}\\d+[A-Za-z]?")
-	if err != nil {
-		Log.Printf("%s\n", err)
-		return 0
-	}
+	var bench, totalBench float64
+	numOfBench := 0
 
 	cmdScanner := bufio.NewScanner(cmdOut)
 	cmdScanner.Split(bufio.ScanLines)
 	for cmdScanner.Scan() {
 		// Get benchmark from line
 		if strings.HasPrefix(cmdScanner.Text(), benchLinePrefix) {
-			fmt.Printf("%s\n", re.FindString(strings.Replace(strings.SplitN(cmdScanner.Text(), ":", 2)[1], " ", "", -1)))
+			bench = getBenchValue(regexpBenchValue.FindString(strings.Replace(strings.SplitN(cmdScanner.Text(), ":", 2)[1], " ", "", -1)))
+			if bench > 0 {
+				totalBench += bench
+				numOfBench++
+			}
 		}
+	}
+
+	if totalBench > 0 {
+		return uint64(math.Floor((totalBench / float64(numOfBench)) + 0.5))
 	}
 
 	if err = cmdScanner.Err(); err != nil {
@@ -201,4 +228,39 @@ func getBench(benchType int, platformId *string) int {
 	}
 
 	return 0
+}
+
+func getBenchValue(benchValue string) float64 {
+	benchFloat, err := strconv.ParseFloat(regexpBenchFloat.FindString(benchValue), 64)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return 0
+	}
+
+	benchSuffix := strings.ToUpper(regexpBenchSuffix.FindString(benchValue))
+
+	// Should return bench in Mega
+
+	if len(benchSuffix) == 0 {
+		benchFloat /= 1048576 // Byte to Mega
+	}
+
+	switch benchSuffix {
+	case "K":
+		benchFloat /= 1024 // Kilo to Mega
+	case "G":
+		benchFloat *= 1024 // Giga to Mega
+	case "T":
+		benchFloat *= 1048576 // Tera to Mega
+	case "P":
+		benchFloat *= 1073741824 // Peta to Mega
+	case "E":
+		benchFloat *= 1099511627776 // Exa to Mega
+	case "Z":
+		benchFloat *= 1125899906842624 // Zetta to Mega
+	case "Y":
+		benchFloat *= 1152921504606846976 // Yotta to Mega
+	}
+
+	return benchFloat
 }
