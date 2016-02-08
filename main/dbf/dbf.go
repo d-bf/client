@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/d-bf/client/dbf"
 	"github.com/d-bf/client/term"
 	"os"
@@ -15,6 +16,7 @@ func deferPanic() {
 }
 
 func initialize() {
+	fmt.Println("Initializing...")
 	dbf.InitLog()
 	dbf.InitConfig()
 }

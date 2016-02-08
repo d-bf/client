@@ -64,6 +64,9 @@ func check() {
 	// Check config file
 	if _, err := os.Stat(pathConfFile); err != nil {
 		if os.IsNotExist(err) { // Does not exist, so create it
+
+			fmt.Println("Creating initial config file...")
+
 			// Create initial config file
 			err = createConfDbf()
 			if err == nil {
@@ -78,6 +81,8 @@ func check() {
 			panic(1)
 		}
 	} else { // Sync config file
+		fmt.Println("Synchronizing config file...")
+
 		err := checkDir(pathVendor)
 		if err != nil {
 			Log.Printf("%s\n", err)
@@ -176,12 +181,17 @@ func getBench(benchType int, platformId *string) uint64 {
 	pathVendorBench += *platformId
 
 	if _, err := os.Stat(pathVendorBench); os.IsNotExist(err) {
+
+		fmt.Printf("Downloading vendor file for benchmarking (%s)...\n", *platformId)
+
 		if getVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &pathVendorBench) == false {
 			return 0
 		}
 	}
 
 	// Preform benchmark
+	fmt.Printf("Preforming benchmark (%s)...\n", *platformId)
+
 	cmd := exec.Command(pathVendorBench, "-b", "-m 0")
 
 	cmdOut, err := cmd.StdoutPipe()
