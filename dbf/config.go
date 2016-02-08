@@ -211,20 +211,18 @@ func getBench(benchType int, platformId *string) uint64 {
 			}
 		}
 	}
-
-	if totalBench > 0 {
-		return uint64(math.Floor((totalBench / float64(numOfBench)) + 0.5))
-	}
-
-	if err = cmdScanner.Err(); err != nil {
+	err = cmdScanner.Err()
+	if err != nil {
 		Log.Printf("%s\n", err)
-		return 0
 	}
 
 	err = cmd.Wait()
 	if err != nil {
 		Log.Printf("%s\n", err)
-		return 0
+	}
+
+	if numOfBench > 0 {
+		return uint64(math.Floor((totalBench / float64(numOfBench)) + 0.5))
 	}
 
 	return 0
