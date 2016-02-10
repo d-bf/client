@@ -29,9 +29,9 @@ func setDefaultHeader(req *http.Request) {
 }
 
 func getVendor(vendorType string, vendorName *string, platformId *string, vendorPath *string) bool {
-	reqJsonByte := []byte(`{"vendor_type":"` + vendorType + `","name":"` + *vendorName + `","platform_id":"` + *platformId + `"}`)
+	reqJson := `{"vendor_type":"` + vendorType + `","name":"` + *vendorName + `","platform_id":"` + *platformId + `"}`
 
-	req, err := http.NewRequest("POST", serverUrl+_URL_GET_VENDOR, bytes.NewBuffer(reqJsonByte))
+	req, err := http.NewRequest("POST", serverUrl+_URL_GET_VENDOR, bytes.NewBufferString(reqJson))
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false
