@@ -28,6 +28,7 @@ func main() {
 	term.Clear()
 
 	//	for { // Infinite loop
+	fmt.Println("Checking for new task from server...")
 	dbf.GetTask()
 	//	}
 }

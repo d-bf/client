@@ -2,7 +2,9 @@ package dbf
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"os"
 )
 
 type CrackTask struct {
@@ -13,11 +15,11 @@ type CrackTask struct {
 }
 
 func saveTask(tasks *[]CrackTask) {
-	pathTask := getPath(_PATH_TASK)
+	taskPath := getPath(_PATH_TASK)
 	for _, task := range *tasks {
-		taskJson, err := json.MarshalIndent(&task, "", "\t")
+		taskJson, err := json.Marshal(&task)
 		if err == nil {
-			err = ioutil.WriteFile(pathTask+task.Platform, taskJson, 0664)
+			err = ioutil.WriteFile(taskPath+task.Platform, taskJson, 0664)
 			if err == nil {
 				processTask(&task)
 			} else {
@@ -29,6 +31,29 @@ func saveTask(tasks *[]CrackTask) {
 	}
 }
 
-func processTask(task *CrackTask) {
-	//pathCrack := getPath(_PATH_CRACK) + task.Crack_id + PATH_SEPARATOR + "info.json"
+func processTask(task *CrackTask) bool {
+	crackInfoPath := getPath(_PATH_CRACK) + task.Crack_id + PATH_SEPARATOR
+	err := checkDir(crackInfoPath)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	crackInfoPath += "info.json"
+
+	if _, err := os.Stat(crackInfoPath); err != nil {
+		if os.IsNotExist(err) { // Does not exist, so get it
+
+			fmt.Printf("Getting crack info of crack #%s...\n", task.Crack_id)
+
+			if getCrackInfo(`{"id":"`+task.Crack_id+`","platform":"`+task.Platform+`"}`, &crackInfoPath) == false {
+				return false
+			}
+		} else {
+			Log.Printf("%s\n", err) // Error in accessing
+			return false
+		}
+	}
+
+	// Process crack
+	return processCrack(task, &crackInfoPath)
 }

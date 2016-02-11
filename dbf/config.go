@@ -173,6 +173,8 @@ func check() {
 		}
 		activePlatStr = string(activePlatByte)
 
+		fmt.Println("Updating config file...")
+
 		// Update config file
 		saveConfDbf()
 	}
@@ -220,11 +222,16 @@ func getBench(benchType int, platformId *string) uint64 {
 	}
 	pathVendorBench += *platformId
 
-	if _, err := os.Stat(pathVendorBench); os.IsNotExist(err) {
+	if _, err := os.Stat(pathVendorBench); err != nil {
+		if os.IsNotExist(err) { // Does not exist, so get it
 
-		fmt.Printf("Downloading vendor file for benchmarking (%s)...\n", *platformId)
+			fmt.Printf("Downloading vendor file for benchmarking (%s)...\n", *platformId)
 
-		if getVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &pathVendorBench) == false {
+			if getVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &pathVendorBench) == false {
+				return 0
+			}
+		} else {
+			Log.Printf("%s\n", err) // Error in accessing
 			return 0
 		}
 	}

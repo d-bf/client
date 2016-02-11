@@ -108,3 +108,44 @@ func GetTask() bool {
 
 	return true
 }
+
+func getCrackInfo(reqJson string, crackInfoPath *string) bool {
+	req, err := http.NewRequest("POST", serverUrl+_URL_GET_CRACK_INFO, bytes.NewBufferString(reqJson))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	setDefaultHeader(req)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		Log.Printf("Bad response from server:\nStatus: %s\nHeaders: %s\n", resp.Status, resp.Header)
+		return false
+	}
+
+	// Process response
+	crackInfoFile, err := os.OpenFile(*crackInfoPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	defer crackInfoFile.Close()
+
+	_, err = io.Copy(crackInfoFile, resp.Body)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	os.Rename(*crackInfoPath+".tmp", *crackInfoPath)
+
+	return true
+}
