@@ -5,26 +5,26 @@ import (
 	"io/ioutil"
 )
 
-type ConfigDbf struct {
-	Server   ConfDbfServer     `json:"server"`
-	Platform []ConfDbfPlatform `json:"platform"`
+type StructConfDbf struct {
+	Server   StructConfDbfServer     `json:"server"`
+	Platform []StructConfDbfPlatform `json:"platform"`
 }
 
-type ConfDbfServer struct {
+type StructConfDbfServer struct {
 	Url_api    string `json:"url_api"`
 	Version    string `json:"version"`
 	Ssl_verify int    `json:"ssl_verify"`
 }
 
-type ConfDbfPlatform struct {
+type StructConfDbfPlatform struct {
 	Id        string `json:"id"`
 	Active    int    `json:"active"`
 	Benchmark uint64 `json:"benchmark"`
 }
 
 func createConfDbf() error {
-	confDbf = ConfigDbf{
-		Server: ConfDbfServer{
+	confDbf = StructConfDbf{
+		Server: StructConfDbfServer{
 			Url_api:    "",
 			Version:    "v1",
 			Ssl_verify: 0,

@@ -35,24 +35,24 @@ func initConfigPlatform() {
 }
 
 func createPlatform() {
-	confDbf.Platform = make([]ConfDbfPlatform, 3)
+	confDbf.Platform = make([]StructConfDbfPlatform, 3)
 
 	// CPU
-	confDbf.Platform[0] = ConfDbfPlatform{
+	confDbf.Platform[0] = StructConfDbfPlatform{
 		Id:        "cpu_" + basePlatform,
 		Active:    1,
 		Benchmark: 0,
 	}
 
 	// GPU AMD
-	confDbf.Platform[1] = ConfDbfPlatform{
+	confDbf.Platform[1] = StructConfDbfPlatform{
 		Id:        "gpu_" + basePlatform + "_amd",
 		Active:    0,
 		Benchmark: 0,
 	}
 
 	// GPU Nvidia
-	confDbf.Platform[2] = ConfDbfPlatform{
+	confDbf.Platform[2] = StructConfDbfPlatform{
 		Id:        "gpu_" + basePlatform + "_nv",
 		Active:    0,
 		Benchmark: 0,

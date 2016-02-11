@@ -11,7 +11,7 @@ import (
 
 var (
 	client    http.Client
-	respTask  []CrackTask
+	respTask  []StructCrackTask
 	serverUrl string
 )
 

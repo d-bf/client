@@ -7,14 +7,14 @@ import (
 	"os"
 )
 
-type CrackTask struct {
+type StructCrackTask struct {
 	Crack_id string `json:"crack_id"`
 	Start    string `json:"start"`
 	Offset   string `json:"offset"`
 	Platform string `json:"platform"`
 }
 
-func saveTask(tasks *[]CrackTask) {
+func saveTask(tasks *[]StructCrackTask) {
 	taskPath := getPath(_PATH_TASK)
 	for _, task := range *tasks {
 		taskJson, err := json.Marshal(&task)
@@ -31,7 +31,7 @@ func saveTask(tasks *[]CrackTask) {
 	}
 }
 
-func processTask(task *CrackTask) bool {
+func processTask(task *StructCrackTask) bool {
 	crackInfoPath := getPath(_PATH_CRACK) + task.Crack_id + PATH_SEPARATOR
 	err := checkDir(crackInfoPath)
 	if err != nil {

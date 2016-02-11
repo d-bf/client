@@ -31,7 +31,7 @@ const (
 )
 
 var (
-	confDbf           ConfigDbf
+	confDbf           StructConfDbf
 	activePlatStr     string
 	pathData          string
 	regexpBenchValue  *regexp.Regexp
@@ -39,7 +39,7 @@ var (
 	regexpBenchSuffix *regexp.Regexp
 )
 
-type ActivePlatform struct {
+type StructActivePlatform struct {
 	Id        string `json:"id"`
 	Benchmark uint64 `json:"benchmark"`
 }
@@ -147,7 +147,7 @@ func check() {
 		}
 
 		// Check default vendor files and update benchmarks
-		var activePlat []ActivePlatform
+		var activePlat []StructActivePlatform
 		for i, platform := range confDbf.Platform {
 			if platform.Active != 0 { // Is active
 				if strings.HasPrefix(platform.Id, "cpu") { // CPU
@@ -159,7 +159,7 @@ func check() {
 				}
 
 				if confDbf.Platform[i].Benchmark > 0 {
-					activePlat = append(activePlat, ActivePlatform{
+					activePlat = append(activePlat, StructActivePlatform{
 						Id:        platform.Id,
 						Benchmark: confDbf.Platform[i].Benchmark,
 					})
