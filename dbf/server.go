@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -12,16 +11,9 @@ import (
 
 var (
 	client    http.Client
-	respTask  []ResponseTask
+	respTask  []CrackTask
 	serverUrl string
 )
-
-type ResponseTask struct {
-	Crack_id string `json:"crack_id"`
-	Start    string `json:"start"`
-	Offset   string `json:"offset"`
-	Platform string `json:"platform"`
-}
 
 func initServer() {
 	client = http.Client{
@@ -112,9 +104,7 @@ func GetTask() bool {
 		return false
 	}
 
-	for i, task := range respTask {
-		fmt.Println("Task", i, ":", task)
-	}
+	saveTask(&respTask)
 
 	return true
 }
