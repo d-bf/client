@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	PATH_SEPARATOR = string(os.PathSeparator)
+
 	_PATH_CONF_DIR  = 1
 	_PATH_CONF_FILE = 2
 	_PATH_VENDOR    = 3
@@ -49,7 +51,7 @@ func InitConfig() {
 	var err error
 	pathData, err = filepath.Abs(filepath.Dir(os.Args[0]))
 	if err == nil {
-		pathData += string(os.PathSeparator) + "dbf-data" + string(os.PathSeparator)
+		pathData += PATH_SEPARATOR + "dbf-data" + PATH_SEPARATOR
 	} else {
 		Log.Printf("%s\n", err)
 		panic(1)
@@ -61,15 +63,15 @@ func InitConfig() {
 func getPath(path int) string {
 	switch path {
 	case _PATH_CONF_DIR:
-		return pathData + "config" + string(os.PathSeparator)
+		return pathData + "config" + PATH_SEPARATOR
 	case _PATH_CONF_FILE:
-		return pathData + "config" + string(os.PathSeparator) + "dbf.json"
+		return pathData + "config" + PATH_SEPARATOR + "dbf.json"
 	case _PATH_CRACK:
-		return pathData + "vendor" + string(os.PathSeparator)
+		return pathData + "crack" + PATH_SEPARATOR
 	case _PATH_TASK:
-		return pathData + "task" + string(os.PathSeparator)
+		return pathData + "task" + PATH_SEPARATOR
 	case _PATH_VENDOR:
-		return pathData + "crack" + string(os.PathSeparator)
+		return pathData + "vendor" + PATH_SEPARATOR
 	default:
 		Log.Printf("Undefined path id '%d' in getPath()!\n", path)
 		return ""
@@ -106,6 +108,12 @@ func check() {
 		fmt.Println("Synchronizing config file...")
 
 		err := checkDir(getPath(_PATH_VENDOR))
+		if err != nil {
+			Log.Printf("%s\n", err)
+			panic(1)
+		}
+
+		err = checkDir(getPath(_PATH_TASK))
 		if err != nil {
 			Log.Printf("%s\n", err)
 			panic(1)
@@ -204,7 +212,7 @@ func getBench(benchType int, platformId *string) uint64 {
 		return 0
 	}
 
-	pathVendorBench := getPath(_PATH_VENDOR) + "cracker" + string(os.PathSeparator) + vendorBench + string(os.PathSeparator) + *platformId + string(os.PathSeparator)
+	pathVendorBench := getPath(_PATH_VENDOR) + "cracker" + PATH_SEPARATOR + vendorBench + PATH_SEPARATOR + *platformId + PATH_SEPARATOR
 	err := checkDir(pathVendorBench)
 	if err != nil {
 		Log.Printf("%s\n", err)
