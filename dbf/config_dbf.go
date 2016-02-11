@@ -6,8 +6,8 @@ import (
 )
 
 type ConfigDbf struct {
-	Server   *ConfDbfServer     `json:"server"`
-	Platform *[]ConfDbfPlatform `json:"platform"`
+	Server   ConfDbfServer     `json:"server"`
+	Platform []ConfDbfPlatform `json:"platform"`
 }
 
 type ConfDbfServer struct {
@@ -23,20 +23,21 @@ type ConfDbfPlatform struct {
 }
 
 func createConfDbf() error {
-	confDbf := ConfigDbf{
-		Server: &ConfDbfServer{
+	confDbf = ConfigDbf{
+		Server: ConfDbfServer{
 			Url_api:    "",
 			Version:    "v1",
 			Ssl_verify: 0,
 		},
-		Platform: createPlatform(),
 	}
 
-	return saveConfDbf(&confDbf)
+	createPlatform()
+
+	return saveConfDbf()
 }
 
-func saveConfDbf(confDbf *ConfigDbf) error {
-	confDbfJson, err := json.MarshalIndent(confDbf, "", "\t")
+func saveConfDbf() error {
+	confDbfJson, err := json.MarshalIndent(&confDbf, "", "\t")
 	if err == nil {
 		err = ioutil.WriteFile(pathConfFile, confDbfJson, 0664)
 		return err
@@ -45,20 +46,16 @@ func saveConfDbf(confDbf *ConfigDbf) error {
 	}
 }
 
-func readConfDbf() *ConfigDbf {
+func setConfDbf() {
 	confDbfJson, err := ioutil.ReadFile(pathConfFile)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		panic(1)
 	}
 
-	var confDbf ConfigDbf
-
 	err = json.Unmarshal(confDbfJson, &confDbf)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		panic(1)
 	}
-
-	return &confDbf
 }

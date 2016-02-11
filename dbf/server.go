@@ -9,12 +9,12 @@ import (
 )
 
 var (
-	client    *http.Client
+	client    http.Client
 	serverUrl string
 )
 
 func initServer() {
-	client = &http.Client{
+	client = http.Client{
 		Transport: &http.Transport{
 			DisableCompression: false,
 			TLSClientConfig:    &tls.Config{InsecureSkipVerify: (confDbf.Server.Ssl_verify == 0)},
@@ -48,7 +48,7 @@ func getVendor(vendorType string, vendorName *string, platformId *string, vendor
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		Log.Printf("Bad response from server:\nStatus: %s\n Headers: %s\n", resp.Status, resp.Header)
+		Log.Printf("Bad response from server:\nStatus: %s\nHeaders: %s\n", resp.Status, resp.Header)
 		return false
 	}
 

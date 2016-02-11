@@ -34,29 +34,27 @@ func initConfigPlatform() {
 	}
 }
 
-func createPlatform() *[]ConfDbfPlatform {
-	platform := make([]ConfDbfPlatform, 3)
+func createPlatform() {
+	confDbf.Platform = make([]ConfDbfPlatform, 3)
 
 	// CPU
-	platform[0] = ConfDbfPlatform{
+	confDbf.Platform[0] = ConfDbfPlatform{
 		Id:        "cpu_" + basePlatform,
 		Active:    1,
 		Benchmark: 0,
 	}
 
 	// GPU AMD
-	platform[1] = ConfDbfPlatform{
+	confDbf.Platform[1] = ConfDbfPlatform{
 		Id:        "gpu_" + basePlatform + "_amd",
 		Active:    0,
 		Benchmark: 0,
 	}
 
 	// GPU Nvidia
-	platform[2] = ConfDbfPlatform{
+	confDbf.Platform[2] = ConfDbfPlatform{
 		Id:        "gpu_" + basePlatform + "_nv",
 		Active:    0,
 		Benchmark: 0,
 	}
-
-	return &platform
 }

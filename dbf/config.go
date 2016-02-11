@@ -22,7 +22,8 @@ const (
 )
 
 var (
-	confDbf           *ConfigDbf
+	confDbf           ConfigDbf
+	activePlat        []ActivePlatform
 	pathCurrent       string
 	pathConfDir       string
 	pathConfFile      string
@@ -32,6 +33,11 @@ var (
 	regexpBenchFloat  *regexp.Regexp
 	regexpBenchSuffix *regexp.Regexp
 )
+
+type ActivePlatform struct {
+	Id        string `json:"id"`
+	Benchmark uint64 `json:"benchmark"`
+}
 
 func InitConfig() {
 	initConfigPlatform()
@@ -95,7 +101,7 @@ func check() {
 			panic(1)
 		}
 
-		confDbf = readConfDbf()
+		setConfDbf()
 
 		initServer()
 
@@ -117,24 +123,27 @@ func check() {
 		}
 
 		// Check default vendor files and update benchmarks
-		for i, platform := range *confDbf.Platform {
-			if strings.HasPrefix(platform.Id, "cpu") { // CPU
-				if platform.Active != 0 { // Is active
-					(*confDbf.Platform)[i].Benchmark = getBench(_BENCH_TYPE_CPU, &platform.Id)
+		for i, platform := range confDbf.Platform {
+			if platform.Active != 0 { // Is active
+				if strings.HasPrefix(platform.Id, "cpu") { // CPU
+					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_CPU, &platform.Id)
+				} else if strings.HasSuffix(platform.Id, "_amd") { // GPU AMD
+					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_AMD, &platform.Id)
+				} else if strings.HasSuffix(platform.Id, "_nv") { // GPU Nvidia
+					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_NV, &platform.Id)
 				}
-			} else if strings.HasSuffix(platform.Id, "_amd") { // GPU AMD
-				if platform.Active != 0 { // Is active
-					(*confDbf.Platform)[i].Benchmark = getBench(_BENCH_TYPE_GPU_AMD, &platform.Id)
-				}
-			} else if strings.HasSuffix(platform.Id, "_nv") { // GPU Nvidia
-				if platform.Active != 0 { // Is active
-					(*confDbf.Platform)[i].Benchmark = getBench(_BENCH_TYPE_GPU_NV, &platform.Id)
+
+				if confDbf.Platform[i].Benchmark > 0 {
+					activePlat = append(activePlat, ActivePlatform{
+						Id:        platform.Id,
+						Benchmark: confDbf.Platform[i].Benchmark,
+					})
 				}
 			}
 		}
 
 		// Update config file
-		saveConfDbf(confDbf)
+		saveConfDbf()
 	}
 }
 
