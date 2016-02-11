@@ -25,6 +25,9 @@ func main() {
 	defer deferPanic()
 
 	initialize()
-
 	term.Clear()
+
+	//	for { // Infinite loop
+	dbf.GetTask()
+	//	}
 }

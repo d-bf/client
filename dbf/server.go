@@ -3,6 +3,8 @@ package dbf
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -10,8 +12,16 @@ import (
 
 var (
 	client    http.Client
+	respTask  []ResponseTask
 	serverUrl string
 )
+
+type ResponseTask struct {
+	Crack_id string `json:"crack_id"`
+	Start    string `json:"start"`
+	Offset   string `json:"offset"`
+	Platform string `json:"platform"`
+}
 
 func initServer() {
 	client = http.Client{
@@ -52,6 +62,7 @@ func getVendor(vendorType string, vendorName *string, platformId *string, vendor
 		return false
 	}
 
+	// Process response
 	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0774)
 	if err != nil {
 		Log.Printf("%s\n", err)
@@ -66,6 +77,44 @@ func getVendor(vendorType string, vendorName *string, platformId *string, vendor
 	}
 
 	os.Rename(*vendorPath+".tmp", *vendorPath)
+
+	return true
+}
+
+func GetTask() bool {
+	reqJson := `{"client_info":{"platform":` + activePlatStr + `}}`
+
+	req, err := http.NewRequest("POST", serverUrl+_URL_GET_TASK, bytes.NewBufferString(reqJson))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	setDefaultHeader(req)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		Log.Printf("Bad response from server:\nStatus: %s\nHeaders: %s\n", resp.Status, resp.Header)
+		return false
+	}
+
+	// Process response
+	err = json.NewDecoder(resp.Body).Decode(&respTask)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	for i, task := range respTask {
+		fmt.Println("Task", i, ":", task)
+	}
 
 	return true
 }
