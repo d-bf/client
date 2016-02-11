@@ -2,6 +2,7 @@ package dbf
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -23,8 +24,8 @@ const (
 
 var (
 	confDbf           ConfigDbf
-	activePlat        []ActivePlatform
-	pathCurrent       string
+	activePlatStr     string
+	pathData          string
 	pathConfDir       string
 	pathConfFile      string
 	pathVendor        string
@@ -44,18 +45,18 @@ func InitConfig() {
 
 	// Set current path
 	var err error
-	pathCurrent, err = filepath.Abs(filepath.Dir(os.Args[0]))
+	pathData, err = filepath.Abs(filepath.Dir(os.Args[0]))
 	if err == nil {
-		pathCurrent += string(os.PathSeparator)
+		pathData += string(os.PathSeparator) + "dbf-data" + string(os.PathSeparator)
 	} else {
 		Log.Printf("%s\n", err)
 		panic(1)
 	}
 
-	pathConfDir = pathCurrent + "config" + string(os.PathSeparator)
+	pathConfDir = pathData + "config" + string(os.PathSeparator)
 	pathConfFile = pathConfDir + "dbf.json"
-	pathVendor = pathCurrent + "vendor" + string(os.PathSeparator)
-	pathCrack = pathCurrent + "crack" + string(os.PathSeparator)
+	pathVendor = pathData + "vendor" + string(os.PathSeparator)
+	pathCrack = pathData + "crack" + string(os.PathSeparator)
 
 	check()
 }
@@ -123,6 +124,7 @@ func check() {
 		}
 
 		// Check default vendor files and update benchmarks
+		var activePlat []ActivePlatform
 		for i, platform := range confDbf.Platform {
 			if platform.Active != 0 { // Is active
 				if strings.HasPrefix(platform.Id, "cpu") { // CPU
@@ -141,6 +143,12 @@ func check() {
 				}
 			}
 		}
+
+		activePlatByte, err := json.Marshal(activePlat)
+		if err != nil {
+			Log.Printf("%s\n", err)
+		}
+		activePlatStr = string(activePlatByte)
 
 		// Update config file
 		saveConfDbf()
