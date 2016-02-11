@@ -14,6 +14,12 @@ import (
 )
 
 const (
+	_PATH_CONF_DIR  = 1
+	_PATH_CONF_FILE = 2
+	_PATH_VENDOR    = 3
+	_PATH_TASK      = 4
+	_PATH_CRACK     = 5
+
 	_BENCH_TYPE_CPU     = 0
 	_BENCH_TYPE_GPU_AMD = 1
 	_BENCH_TYPE_GPU_NV  = 2
@@ -26,10 +32,6 @@ var (
 	confDbf           ConfigDbf
 	activePlatStr     string
 	pathData          string
-	pathConfDir       string
-	pathConfFile      string
-	pathVendor        string
-	pathCrack         string
 	regexpBenchValue  *regexp.Regexp
 	regexpBenchFloat  *regexp.Regexp
 	regexpBenchSuffix *regexp.Regexp
@@ -53,23 +55,36 @@ func InitConfig() {
 		panic(1)
 	}
 
-	pathConfDir = pathData + "config" + string(os.PathSeparator)
-	pathConfFile = pathConfDir + "dbf.json"
-	pathVendor = pathData + "vendor" + string(os.PathSeparator)
-	pathCrack = pathData + "crack" + string(os.PathSeparator)
-
 	check()
 }
 
+func getPath(path int) string {
+	switch path {
+	case _PATH_CONF_DIR:
+		return pathData + "config" + string(os.PathSeparator)
+	case _PATH_CONF_FILE:
+		return pathData + "config" + string(os.PathSeparator) + "dbf.json"
+	case _PATH_CRACK:
+		return pathData + "vendor" + string(os.PathSeparator)
+	case _PATH_TASK:
+		return pathData + "task" + string(os.PathSeparator)
+	case _PATH_VENDOR:
+		return pathData + "crack" + string(os.PathSeparator)
+	default:
+		Log.Printf("Undefined path id '%d' in getPath()!\n", path)
+		return ""
+	}
+}
+
 func check() {
-	err := checkDir(pathConfDir)
+	err := checkDir(getPath(_PATH_CONF_DIR))
 	if err != nil {
 		Log.Printf("%s\n", err)
 		panic(1)
 	}
 
 	// Check config file
-	if _, err := os.Stat(pathConfFile); err != nil {
+	if _, err := os.Stat(getPath(_PATH_CONF_FILE)); err != nil {
 		if os.IsNotExist(err) { // Does not exist, so create it
 
 			fmt.Println("Creating initial config file...")
@@ -77,7 +92,7 @@ func check() {
 			// Create initial config file
 			err = createConfDbf()
 			if err == nil {
-				fmt.Printf("Please enter server's URL in url_api in config file: %s\n", pathConfFile)
+				fmt.Printf("Please enter server's URL in url_api in config file: %s\n", getPath(_PATH_CONF_FILE))
 				panic(0)
 			} else { // Can't create
 				Log.Printf("%s\n", err)
@@ -90,13 +105,13 @@ func check() {
 	} else { // Sync config file
 		fmt.Println("Synchronizing config file...")
 
-		err := checkDir(pathVendor)
+		err := checkDir(getPath(_PATH_VENDOR))
 		if err != nil {
 			Log.Printf("%s\n", err)
 			panic(1)
 		}
 
-		err = checkDir(pathCrack)
+		err = checkDir(getPath(_PATH_CRACK))
 		if err != nil {
 			Log.Printf("%s\n", err)
 			panic(1)
@@ -189,7 +204,7 @@ func getBench(benchType int, platformId *string) uint64 {
 		return 0
 	}
 
-	pathVendorBench := pathVendor + "cracker" + string(os.PathSeparator) + vendorBench + string(os.PathSeparator) + *platformId + string(os.PathSeparator)
+	pathVendorBench := getPath(_PATH_VENDOR) + "cracker" + string(os.PathSeparator) + vendorBench + string(os.PathSeparator) + *platformId + string(os.PathSeparator)
 	err := checkDir(pathVendorBench)
 	if err != nil {
 		Log.Printf("%s\n", err)

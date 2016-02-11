@@ -39,7 +39,7 @@ func createConfDbf() error {
 func saveConfDbf() error {
 	confDbfJson, err := json.MarshalIndent(&confDbf, "", "\t")
 	if err == nil {
-		err = ioutil.WriteFile(pathConfFile, confDbfJson, 0664)
+		err = ioutil.WriteFile(getPath(_PATH_CONF_FILE), confDbfJson, 0664)
 		return err
 	} else {
 		return err
@@ -47,7 +47,7 @@ func saveConfDbf() error {
 }
 
 func setConfDbf() {
-	confDbfJson, err := ioutil.ReadFile(pathConfFile)
+	confDbfJson, err := ioutil.ReadFile(getPath(_PATH_CONF_FILE))
 	if err != nil {
 		Log.Printf("%s\n", err)
 		panic(1)
