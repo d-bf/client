@@ -30,8 +30,8 @@ func setDefaultHeader(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 }
 
-func getVendor(vendorType string, vendorName *string, platformId *string, vendorPath *string) bool {
-	reqJson := `{"vendor_type":"` + vendorType + `","name":"` + *vendorName + `","platform_id":"` + *platformId + `"}`
+func getVendor(vendorType *string, vendorName *string, platformId *string, vendorPath *string) bool {
+	reqJson := `{"vendor_type":"` + *vendorType + `","name":"` + *vendorName + `","platform_id":"` + *platformId + `"}`
 
 	req, err := http.NewRequest("POST", serverUrl+_URL_GET_VENDOR, bytes.NewBufferString(reqJson))
 	if err != nil {

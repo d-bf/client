@@ -214,32 +214,22 @@ func getBench(benchType int, platformId *string) uint64 {
 		return 0
 	}
 
-	pathVendorBench := getPath(_PATH_VENDOR) + "cracker" + PATH_SEPARATOR + vendorBench + PATH_SEPARATOR + *platformId + PATH_SEPARATOR
-	err := checkDir(pathVendorBench)
+	vendorBenchPath := getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + vendorBench + PATH_SEPARATOR + *platformId + PATH_SEPARATOR
+	err := checkDir(vendorBenchPath)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		panic(1)
 	}
-	pathVendorBench += *platformId
+	vendorBenchPath += _VENDOR_TYPE_CRACKER
 
-	if _, err := os.Stat(pathVendorBench); err != nil {
-		if os.IsNotExist(err) { // Does not exist, so get it
-
-			fmt.Printf("Downloading vendor file for benchmarking (%s)...\n", *platformId)
-
-			if getVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &pathVendorBench) == false {
-				return 0
-			}
-		} else {
-			Log.Printf("%s\n", err) // Error in accessing
-			return 0
-		}
+	if checkVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &vendorBenchPath) == false {
+		return 0
 	}
 
 	// Preform benchmark
 	fmt.Printf("Preforming benchmark (%s)...\n", *platformId)
 
-	cmd := exec.Command(pathVendorBench, "-b", "-m 0")
+	cmd := exec.Command(vendorBenchPath, "-b", "-m 0")
 
 	cmdOut, err := cmd.StdoutPipe()
 	if err != nil {
@@ -318,4 +308,20 @@ func getBenchValue(benchValue string) uint64 {
 	}
 
 	return uint64(math.Floor(benchFloat + 0.5))
+}
+
+func checkVendor(vendorType string, vendorName *string, platformId *string, vendorPath *string) bool {
+	if _, err := os.Stat(*vendorPath); err != nil {
+		if os.IsNotExist(err) { // Does not exist, so get it
+
+			fmt.Printf("Downloading %s: %s (%s)...\n", vendorType, *vendorName, *platformId)
+
+			return getVendor(&vendorType, vendorName, platformId, vendorPath)
+		} else {
+			Log.Printf("%s\n", err) // Error in accessing
+			return false
+		}
+	}
+
+	return true
 }
