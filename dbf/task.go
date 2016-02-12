@@ -19,9 +19,14 @@ func saveTask(tasks *[]StructCrackTask) {
 	for _, task := range *tasks {
 		taskJson, err := json.Marshal(&task)
 		if err == nil {
-			err = ioutil.WriteFile(taskPath+task.Platform, taskJson, 0664)
+			err = checkDir(taskPath + task.Platform)
 			if err == nil {
-				processTask(&task)
+				err = ioutil.WriteFile(taskPath+task.Platform+PATH_SEPARATOR+"task.json", taskJson, 0664)
+				if err == nil {
+					processTask(&task)
+				} else {
+					Log.Printf("%s\n", err)
+				}
 			} else {
 				Log.Printf("%s\n", err)
 			}
@@ -38,7 +43,7 @@ func processTask(task *StructCrackTask) bool {
 		Log.Printf("%s\n", err)
 		return false
 	}
-	crackInfoPath += "info.json"
+	crackInfoPath += "crack.json"
 
 	if _, err := os.Stat(crackInfoPath); err != nil {
 		if os.IsNotExist(err) { // Does not exist, so get it
