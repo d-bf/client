@@ -5,6 +5,7 @@ import (
 	"github.com/d-bf/client/dbf"
 	"github.com/d-bf/client/term"
 	"os"
+	"time"
 )
 
 func deferPanic() {
@@ -27,8 +28,11 @@ func main() {
 	initialize()
 	term.Clear()
 
-	//	for { // Infinite loop
-	fmt.Println("Checking for new task from server...")
-	dbf.GetTask()
-	//	}
+	for { // Infinite loop
+		fmt.Println("Checking for new task from server...")
+		dbf.GetTask()
+		fmt.Println("Wait before checking for next task...")
+		time.Sleep(15 * time.Second)
+		term.Clear()
+	}
 }

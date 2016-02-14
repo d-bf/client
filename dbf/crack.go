@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -26,6 +27,7 @@ type StructCrack struct {
 
 func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	var generatorPath, crackerPath, cmdCracker, cmdGenerator string
+	var crackerArg []string
 	var crackType int
 
 	crackJson, err := ioutil.ReadFile(*crackInfoPath)
@@ -94,20 +96,55 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	}
 
 	taskPath := getPath(_PATH_TASK) + task.Platform + PATH_SEPARATOR
-	generatorReplacer := strings.NewReplacer("GENERATOR", generatorPath, "START", task.Start, "OFFSET", task.Offset, "IN_FILE", taskPath+"file.fifo")
-	crackerReplacer := strings.NewReplacer("CRACKER", crackerPath, "HASH_FILE", *crackInfoPath, "OUT_FILE", taskPath+"result", "IN_FILE", taskPath+"file.fifo")
+	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, "IN_FILE", taskPath+"file.fifo")
+	crackerReplacer := strings.NewReplacer("HASH_FILE", *crackInfoPath, "OUT_FILE", taskPath+"result", "IN_FILE", taskPath+"file.fifo")
 
-	if (crackType == _CRACK_TYPE_EMBED) || (crackType == _CRACK_TYPE_STDIN) {
+	if crackType == _CRACK_TYPE_EMBED {
 		cmdCracker = generatorReplacer.Replace(crack.Cmd_cracker)
 		cmdCracker = crackerReplacer.Replace(cmdCracker)
 
-		fmt.Println("Performing crack...")
+		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
+
+		err = json.Unmarshal([]byte(cmdCracker), &crackerArg)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			return false
+		}
+		err = exec.Command(crackerPath, crackerArg...).Run()
+		if err != nil {
+			Log.Printf("%s\n", err)
+			return false
+		}
+
+		resultByte, err := ioutil.ReadFile(taskPath + "result")
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultByte = nil
+			//			status := -1
+		}
+
+		fmt.Printf("Sending result of crack #%s...\n", task.Crack_id)
+
+		if sendResult(`[{"crack_id":"`+task.Crack_id+`","start":"`+task.Start+`","offset":"`+task.Offset+`","result":"`+string(resultByte)+`","status":"0"}]`) == true {
+			fmt.Printf("Removing task info of crack #%s (%s)...\n", task.Crack_id, task.Platform)
+			err = os.RemoveAll(taskPath)
+			if err != nil {
+				Log.Printf("%s\n", err)
+			}
+		}
+	} else if crackType == _CRACK_TYPE_STDIN {
+		cmdGenerator = generatorReplacer.Replace(crack.Cmd_generator)
+		cmdCracker = crackerReplacer.Replace(crack.Cmd_cracker)
+
+		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
+
+		_ = cmdGenerator
 
 	} else if crackType == _CRACK_TYPE_INFILE {
 		cmdGenerator = generatorReplacer.Replace(crack.Cmd_generator)
 		cmdCracker = crackerReplacer.Replace(crack.Cmd_cracker)
 
-		fmt.Println("Performing crack...")
+		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
 		_ = cmdGenerator
 	}

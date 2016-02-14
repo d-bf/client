@@ -149,3 +149,30 @@ func getCrackInfo(reqJson string, crackInfoPath *string) bool {
 
 	return true
 }
+
+func sendResult(reqJson string) bool {
+	req, err := http.NewRequest("POST", serverUrl+_URL_SEND_RESULT, bytes.NewBufferString(reqJson))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	setDefaultHeader(req)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		Log.Printf("Bad response from server:\nStatus: %s\nHeaders: %s\n", resp.Status, resp.Header)
+		return false
+	}
+
+	// Process response
+
+	return true
+}
