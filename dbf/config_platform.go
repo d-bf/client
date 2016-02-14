@@ -4,17 +4,23 @@ import (
 	"runtime"
 )
 
-var basePlatform string
+var (
+	basePlatform  string
+	extExecutable string
+)
 
 func initConfigPlatform() {
 	// Set base platform
 	switch runtime.GOOS { // Set OS
 	case "linux":
 		basePlatform = "linux"
+		extExecutable = ".bin"
 	case "windows":
 		basePlatform = "win"
+		extExecutable = ".exe"
 	case "darwin":
 		basePlatform = "mac"
+		extExecutable = ".app"
 	default:
 		Log.Printf("The operating system '%s' is not supported!\n", runtime.GOOS)
 		panic(1)

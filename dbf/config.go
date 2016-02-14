@@ -220,7 +220,7 @@ func getBench(benchType int, platformId *string) uint64 {
 		Log.Printf("%s\n", err)
 		panic(1)
 	}
-	vendorBenchPath += _VENDOR_TYPE_CRACKER
+	vendorBenchPath += _VENDOR_TYPE_CRACKER + extExecutable
 
 	if checkVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &vendorBenchPath) == false {
 		return 0

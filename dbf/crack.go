@@ -52,7 +52,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			Log.Printf("%s\n", err)
 			return false
 		}
-		crackerPath += _VENDOR_TYPE_CRACKER
+		crackerPath += _VENDOR_TYPE_CRACKER + extExecutable
 		if checkVendor(_VENDOR_TYPE_CRACKER, &crack.Cracker, &task.Platform, &crackerPath) == false {
 			return false
 		}
@@ -68,7 +68,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			Log.Printf("%s\n", err)
 			return false
 		}
-		generatorPath += _VENDOR_TYPE_GENERATOR
+		generatorPath += _VENDOR_TYPE_GENERATOR + extExecutable
 		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &generatorPath) == false {
 			return false
 		}
