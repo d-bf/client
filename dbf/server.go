@@ -58,9 +58,9 @@ func getVendor(vendorType *string, vendorName *string, platformId *string, vendo
 	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0774)
 	if err != nil {
 		Log.Printf("%s\n", err)
+		vendorFile.Close()
 		return false
 	}
-	defer vendorFile.Close()
 
 	_, err = io.Copy(vendorFile, resp.Body)
 	if err != nil {
@@ -68,7 +68,13 @@ func getVendor(vendorType *string, vendorName *string, platformId *string, vendo
 		return false
 	}
 
-	os.Rename(*vendorPath+".tmp", *vendorPath)
+	vendorFile.Close()
+
+	err = os.Rename(*vendorPath+".tmp", *vendorPath)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
 
 	return true
 }
@@ -135,15 +141,17 @@ func getCrackInfo(reqJson string, crackInfoPath *string) bool {
 	crackInfoFile, err := os.OpenFile(*crackInfoPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
 		Log.Printf("%s\n", err)
+		crackInfoFile.Close()
 		return false
 	}
-	defer crackInfoFile.Close()
 
 	_, err = io.Copy(crackInfoFile, resp.Body)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false
 	}
+
+	crackInfoFile.Close()
 
 	os.Rename(*crackInfoPath+".tmp", *crackInfoPath)
 
