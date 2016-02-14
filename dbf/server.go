@@ -55,7 +55,7 @@ func getVendor(vendorType *string, vendorName *string, platformId *string, vendo
 	}
 
 	// Process response
-	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0774)
+	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0774)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		vendorFile.Close()
@@ -138,7 +138,7 @@ func getCrackInfo(reqJson string, crackInfoPath *string) bool {
 	}
 
 	// Process response
-	crackInfoFile, err := os.OpenFile(*crackInfoPath+".tmp", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
+	crackInfoFile, err := os.OpenFile(*crackInfoPath+".tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0664)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		crackInfoFile.Close()

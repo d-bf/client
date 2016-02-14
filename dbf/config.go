@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,9 +30,9 @@ const (
 )
 
 var (
+	PathData          string
 	confDbf           StructConfDbf
 	activePlatStr     string
-	pathData          string
 	regexpBenchValue  *regexp.Regexp
 	regexpBenchFloat  *regexp.Regexp
 	regexpBenchSuffix *regexp.Regexp
@@ -47,31 +46,21 @@ type StructActivePlatform struct {
 func InitConfig() {
 	initConfigPlatform()
 
-	// Set current path
-	var err error
-	pathData, err = filepath.Abs(filepath.Dir(os.Args[0]))
-	if err == nil {
-		pathData += PATH_SEPARATOR + "dbf-data" + PATH_SEPARATOR
-	} else {
-		Log.Printf("%s\n", err)
-		panic(1)
-	}
-
 	check()
 }
 
 func getPath(path int) string {
 	switch path {
 	case _PATH_CONF_DIR:
-		return pathData + "config" + PATH_SEPARATOR
+		return PathData + "config" + PATH_SEPARATOR
 	case _PATH_CONF_FILE:
-		return pathData + "config" + PATH_SEPARATOR + "dbf.json"
+		return PathData + "config" + PATH_SEPARATOR + "dbf.json"
 	case _PATH_CRACK:
-		return pathData + "crack" + PATH_SEPARATOR
+		return PathData + "crack" + PATH_SEPARATOR
 	case _PATH_TASK:
-		return pathData + "task" + PATH_SEPARATOR
+		return PathData + "task" + PATH_SEPARATOR
 	case _PATH_VENDOR:
-		return pathData + "vendor" + PATH_SEPARATOR
+		return PathData + "vendor" + PATH_SEPARATOR
 	default:
 		Log.Printf("Undefined path id '%d' in getPath()!\n", path)
 		return ""

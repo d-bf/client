@@ -5,6 +5,7 @@ import (
 	"github.com/d-bf/client/dbf"
 	"github.com/d-bf/client/term"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -18,6 +19,16 @@ func deferPanic() {
 
 func initialize() {
 	fmt.Println("Initializing...")
+
+	// Set path data
+	pathData, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err == nil {
+		dbf.PathData = pathData + string(os.PathSeparator) + "dbf-data" + string(os.PathSeparator)
+	} else {
+		fmt.Fprintf(os.Stderr, "Can not set current path. Error: %s\n", err)
+		panic(1)
+	}
+
 	dbf.InitLog()
 	dbf.InitConfig()
 }
