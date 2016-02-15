@@ -160,17 +160,24 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
 		if crack.Type == "infile" {
-			err = execGenerator.Start()
+			err = exec.Command("mkfifo", taskPath+"file.fifo").Run()
 			if err != nil {
 				Log.Printf("%s\n", err)
 				resultStatus = -15
 				return false
 			}
 
-			err = execCracker.Start()
+			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
 				resultStatus = -16
+				return false
+			}
+
+			err = execCracker.Start()
+			if err != nil {
+				Log.Printf("%s\n", err)
+				resultStatus = -17
 				return false
 			}
 
@@ -178,7 +185,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			errC := execCracker.Wait()
 			if (errG != nil) || (errC != nil) {
 
-				resultStatus = -16
+				resultStatus = -17
 
 				if errG != nil {
 					Log.Printf("%s\n", errG)
@@ -188,7 +195,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 					resultStatus += -2
 				}
 
-				// Max resultStatus: -19
+				// Max resultStatus: -20
 
 				return false
 			} else {
@@ -203,14 +210,14 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -20
+				resultStatus = -21
 				return false
 			}
 
 			err = execCracker.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -21
+				resultStatus = -22
 				return false
 			}
 
@@ -218,7 +225,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			errW := w.Close()
 			errC := execCracker.Wait()
 			if (errG != nil) || (errW != nil) || (errC != nil) {
-				resultStatus = -21
+				resultStatus = -22
 
 				if errG != nil {
 					Log.Printf("%s\n", errG)
@@ -231,7 +238,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 					resultStatus += -4
 				}
 
-				// Max resultStatus: -28
+				// Max resultStatus: -29
 
 				return false
 			} else {
