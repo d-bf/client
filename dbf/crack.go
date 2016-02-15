@@ -3,6 +3,7 @@ package dbf
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -11,14 +12,9 @@ import (
 	"strings"
 )
 
-const (
-	_CRACK_TYPE_EMBED  = 1
-	_CRACK_TYPE_STDIN  = 2
-	_CRACK_TYPE_INFILE = 3
-)
-
 type StructCrack struct {
 	Id            string `json:"id"`
+	Type          string `json:"type"`
 	Generator     string `json:"generator"`
 	Cracker       string `json:"cracker"`
 	Cmd_generator string `json:"cmd_generator"`
@@ -26,10 +22,15 @@ type StructCrack struct {
 	Target        string `json:"target"`
 }
 
+type StructCrackerConf struct {
+	Stdin  []string `json:"stdin"`
+	Infile []string `json:"infile"`
+}
+
 func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
-	var generatorPath, crackerPath, cmdCracker, cmdGenerator string
-	var crackerArg []string
-	var crackType, resultStatus int
+	var generatorPath, crackerPath, cmdJsonStr string
+	var cmdArg []string
+	var resultStatus int
 
 	resultStatus = -1
 	taskPath := getPath(_PATH_TASK) + task.Platform + PATH_SEPARATOR
@@ -85,30 +86,6 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		}
 	}
 
-	// Check generator & specify crack type
-	if crack.Generator == "" {
-		crackType = _CRACK_TYPE_EMBED
-	} else {
-		generatorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
-		err := checkDir(generatorPath)
-		if err != nil {
-			Log.Printf("%s\n", err)
-			resultStatus = -7
-			return false
-		}
-		generatorPath += _VENDOR_TYPE_GENERATOR + extExecutable
-		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &generatorPath) == false {
-			resultStatus = -8
-			return false
-		}
-
-		if crack.Cmd_generator == "" {
-			crackType = _CRACK_TYPE_STDIN
-		} else {
-			crackType = _CRACK_TYPE_INFILE
-		}
-	}
-
 	// Check hashfile
 	*crackInfoPath = filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "hashfile"
 	if _, err := os.Stat(*crackInfoPath); err != nil {
@@ -116,12 +93,12 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = ioutil.WriteFile(*crackInfoPath, []byte(crack.Target), 0664)
 			if err != nil {
 				Log.Printf("%s\n", err) // Error in creating
-				resultStatus = -9
+				resultStatus = -7
 				return false
 			}
 		} else {
 			Log.Printf("%s\n", err) // Error in accessing
-			resultStatus = -10
+			resultStatus = -8
 			return false
 		}
 	}
@@ -129,40 +106,137 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, "IN_FILE", taskPath+"file.fifo")
 	crackerReplacer := strings.NewReplacer("HASH_FILE", *crackInfoPath, "OUT_FILE", taskPath+"result", "IN_FILE", taskPath+"file.fifo")
 
-	if crackType == _CRACK_TYPE_EMBED {
-		cmdCracker = generatorReplacer.Replace(crack.Cmd_cracker)
-		cmdCracker = crackerReplacer.Replace(cmdCracker)
+	if crack.Type == "embed" { // Embeded
+		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_cracker)
+		cmdJsonStr = crackerReplacer.Replace(cmdJsonStr)
+		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -9
+			return false
+		}
 
 		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
-		err = json.Unmarshal([]byte(cmdCracker), &crackerArg)
+		err = exec.Command(crackerPath, cmdArg...).Run()
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -10
+			return false
+		}
+	} else { // Not embeded
+		// Check generator
+		generatorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
+		err := checkDir(generatorPath)
 		if err != nil {
 			Log.Printf("%s\n", err)
 			resultStatus = -11
 			return false
 		}
-		err = exec.Command(crackerPath, crackerArg...).Run()
-		if err != nil {
-			Log.Printf("%s\n", err)
+		generatorPath += _VENDOR_TYPE_GENERATOR + extExecutable
+		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &generatorPath) == false {
 			resultStatus = -12
 			return false
 		}
-	} else if crackType == _CRACK_TYPE_STDIN {
-		cmdGenerator = generatorReplacer.Replace(crack.Cmd_generator)
-		cmdCracker = crackerReplacer.Replace(crack.Cmd_cracker)
+
+		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_generator)
+		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -13
+			return false
+		}
+		execGenerator := exec.Command(generatorPath, cmdArg...)
+
+		var crackerConf StructCrackerConf
+		cmdJsonStr = crackerReplacer.Replace(crack.Cmd_cracker)
+		err = json.Unmarshal([]byte(cmdJsonStr), &crackerConf)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -14
+			return false
+		}
 
 		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
-		_ = cmdGenerator
+		if crack.Type == "infile" {
+			execCracker := exec.Command(generatorPath, crackerConf.Infile...)
 
-	} else if crackType == _CRACK_TYPE_INFILE {
-		cmdGenerator = generatorReplacer.Replace(crack.Cmd_generator)
-		cmdCracker = crackerReplacer.Replace(crack.Cmd_cracker)
+			err = execGenerator.Start()
+			if err != nil {
+				Log.Printf("%s\n", err)
+				resultStatus = -15
+				return false
+			}
 
-		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
+			err = execCracker.Start()
+			if err != nil {
+				Log.Printf("%s\n", err)
+				resultStatus = -16
+				return false
+			}
 
-		_ = cmdGenerator
+			errG := execGenerator.Wait()
+			errC := execCracker.Wait()
+			if (errG != nil) || (errC != nil) {
+
+				resultStatus = -16
+
+				if errG != nil {
+					Log.Printf("%s\n", errG)
+					resultStatus += -1
+				} else if errC != nil {
+					Log.Printf("%s\n", errC)
+					resultStatus += -2
+				}
+
+				// Max resultStatus: -19
+
+				return false
+			}
+		} else { // Stdin
+			execCracker := exec.Command(generatorPath, crackerConf.Stdin...)
+
+			r, w := io.Pipe()
+			execGenerator.Stdout = w
+			execCracker.Stdin = r
+
+			err = execGenerator.Start()
+			if err != nil {
+				Log.Printf("%s\n", err)
+				resultStatus = -20
+				return false
+			}
+
+			err = execCracker.Start()
+			if err != nil {
+				Log.Printf("%s\n", err)
+				resultStatus = -21
+				return false
+			}
+
+			errG := execGenerator.Wait()
+			errW := w.Close()
+			errC := execCracker.Wait()
+			if (errG != nil) || (errW != nil) || (errC != nil) {
+				resultStatus = -21
+
+				if errG != nil {
+					Log.Printf("%s\n", errG)
+					resultStatus += -1
+				} else if errW != nil {
+					Log.Printf("%s\n", errW)
+					resultStatus += -2
+				} else if errC != nil {
+					Log.Printf("%s\n", errC)
+					resultStatus += -4
+				}
+
+				// Max resultStatus: -28
+
+				return false
+			}
+		}
 	}
-
 	return true
 }
