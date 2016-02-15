@@ -299,6 +299,22 @@ func getBenchValue(benchValue string) uint64 {
 	return uint64(math.Floor(benchFloat + 0.5))
 }
 
+func checkVendorInfo(vendorType string, vendorName *string, platformId *string, vendorInfoPath *string) bool {
+	if _, err := os.Stat(*vendorInfoPath); err != nil {
+		if os.IsNotExist(err) { // Does not exist, so get it
+
+			fmt.Printf("Downloading %s: %s (%s)...\n", vendorType, *vendorName, *platformId)
+
+			return getVendor(&vendorType, vendorName, platformId, vendorInfoPath)
+		} else {
+			Log.Printf("%s\n", err) // Error in accessing
+			return false
+		}
+	}
+
+	return true
+}
+
 func checkVendor(vendorType string, vendorName *string, platformId *string, vendorPath *string) bool {
 	if _, err := os.Stat(*vendorPath); err != nil {
 		if os.IsNotExist(err) { // Does not exist, so get it
