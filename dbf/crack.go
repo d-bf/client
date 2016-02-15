@@ -123,6 +123,9 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			Log.Printf("%s\n", err)
 			resultStatus = -10
 			return false
+		} else {
+			resultStatus = 0
+			return true
 		}
 	} else { // Not embeded
 		// Prepare cracker
@@ -200,6 +203,9 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 				// Max resultStatus: -19
 
 				return false
+			} else {
+				resultStatus = 0
+				return true
 			}
 		} else { // Stdin
 			r, w := io.Pipe()
@@ -240,8 +246,12 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 				// Max resultStatus: -28
 
 				return false
+			} else {
+				resultStatus = 0
+				return true
 			}
 		}
 	}
+
 	return true
 }
