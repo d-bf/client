@@ -28,7 +28,7 @@ type StructCrackerConf struct {
 }
 
 func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
-	var generatorPath, crackerPath, cmdJsonStr string
+	var vendorPath, cmdJsonStr string
 	var cmdArg []string
 	var resultStatus int
 
@@ -72,15 +72,15 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	/* Process crack */
 	// Check cracker
 	if crack.Cracker != "" {
-		crackerPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + crack.Cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
-		err := checkDir(crackerPath)
+		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + crack.Cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
+		err := checkDir(vendorPath)
 		if err != nil {
 			Log.Printf("%s\n", err)
 			resultStatus = -5
 			return false
 		}
-		crackerPath += _VENDOR_TYPE_CRACKER + extExecutable
-		if checkVendor(_VENDOR_TYPE_CRACKER, &crack.Cracker, &task.Platform, &crackerPath) == false {
+		vendorPath += _VENDOR_TYPE_CRACKER + extExecutable
+		if checkVendor(_VENDOR_TYPE_CRACKER, &crack.Cracker, &task.Platform, &vendorPath) == false {
 			resultStatus = -6
 			return false
 		}
@@ -118,36 +118,14 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 
 		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
-		err = exec.Command(crackerPath, cmdArg...).Run()
+		err = exec.Command(vendorPath, cmdArg...).Run()
 		if err != nil {
 			Log.Printf("%s\n", err)
 			resultStatus = -10
 			return false
 		}
 	} else { // Not embeded
-		// Check generator
-		generatorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
-		err := checkDir(generatorPath)
-		if err != nil {
-			Log.Printf("%s\n", err)
-			resultStatus = -11
-			return false
-		}
-		generatorPath += _VENDOR_TYPE_GENERATOR + extExecutable
-		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &generatorPath) == false {
-			resultStatus = -12
-			return false
-		}
-
-		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_generator)
-		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
-		if err != nil {
-			Log.Printf("%s\n", err)
-			resultStatus = -13
-			return false
-		}
-		execGenerator := exec.Command(generatorPath, cmdArg...)
-
+		// Prepare cracker
 		var crackerConf StructCrackerConf
 		cmdJsonStr = crackerReplacer.Replace(crack.Cmd_cracker)
 		err = json.Unmarshal([]byte(cmdJsonStr), &crackerConf)
@@ -157,11 +135,40 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			return false
 		}
 
+		var execCracker *exec.Cmd
+		if crack.Type == "infile" {
+			execCracker = exec.Command(vendorPath, crackerConf.Infile...)
+		} else { // Stdin
+			execCracker = exec.Command(vendorPath, crackerConf.Stdin...)
+		}
+
+		// Check generator
+		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
+		err := checkDir(vendorPath)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -11
+			return false
+		}
+		vendorPath += _VENDOR_TYPE_GENERATOR + extExecutable
+		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &vendorPath) == false {
+			resultStatus = -12
+			return false
+		}
+
+		// Prepare generator
+		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_generator)
+		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -13
+			return false
+		}
+		execGenerator := exec.Command(vendorPath, cmdArg...)
+
 		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
 		if crack.Type == "infile" {
-			execCracker := exec.Command(generatorPath, crackerConf.Infile...)
-
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
@@ -195,8 +202,6 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 				return false
 			}
 		} else { // Stdin
-			execCracker := exec.Command(generatorPath, crackerConf.Stdin...)
-
 			r, w := io.Pipe()
 			execGenerator.Stdout = w
 			execCracker.Stdin = r
