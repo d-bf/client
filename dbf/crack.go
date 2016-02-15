@@ -22,11 +22,6 @@ type StructCrack struct {
 	Target        string `json:"target"`
 }
 
-type StructCrackerConf struct {
-	Stdin  []string `json:"stdin"`
-	Infile []string `json:"infile"`
-}
-
 func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	var vendorPath, cmdJsonStr string
 	var cmdArg []string
@@ -129,33 +124,26 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		}
 	} else { // Not embeded
 		// Prepare cracker
-		var crackerConf StructCrackerConf
 		cmdJsonStr = crackerReplacer.Replace(crack.Cmd_cracker)
-		err = json.Unmarshal([]byte(cmdJsonStr), &crackerConf)
+		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -14
+			resultStatus = -11
 			return false
 		}
-
-		var execCracker *exec.Cmd
-		if crack.Type == "infile" {
-			execCracker = exec.Command(vendorPath, crackerConf.Infile...)
-		} else { // Stdin
-			execCracker = exec.Command(vendorPath, crackerConf.Stdin...)
-		}
+		execCracker := exec.Command(vendorPath, cmdArg...)
 
 		// Check generator
 		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
 		err := checkDir(vendorPath)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -11
+			resultStatus = -12
 			return false
 		}
 		vendorPath += _VENDOR_TYPE_GENERATOR + extExecutable
 		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &vendorPath) == false {
-			resultStatus = -12
+			resultStatus = -13
 			return false
 		}
 
@@ -164,7 +152,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -13
+			resultStatus = -14
 			return false
 		}
 		execGenerator := exec.Command(vendorPath, cmdArg...)
