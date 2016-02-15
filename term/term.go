@@ -12,7 +12,7 @@ func Clear() {
 	case "linux":
 		cmd = exec.Command("clear")
 	case "windows":
-		cmd = exec.Command("cls")
+		cmd = exec.Command("cmd", "/C", "cls")
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Run()
