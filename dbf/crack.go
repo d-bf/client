@@ -67,16 +67,9 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	/* Process crack */
 	// Check cracker
 	if crack.Cracker != "" {
-		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + crack.Cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
-		err := checkDir(vendorPath)
-		if err != nil {
-			Log.Printf("%s\n", err)
-			resultStatus = -5
-			return false
-		}
-		vendorPath += _VENDOR_TYPE_CRACKER + extExecutable
+		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + crack.Cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + task.Platform + extExecutable
 		if checkVendor(_VENDOR_TYPE_CRACKER, &crack.Cracker, &task.Platform, &vendorPath) == false {
-			resultStatus = -6
+			resultStatus = -5
 			return false
 		}
 	}
@@ -88,12 +81,12 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = ioutil.WriteFile(*crackInfoPath, []byte(crack.Target), 0664)
 			if err != nil {
 				Log.Printf("%s\n", err) // Error in creating
-				resultStatus = -7
+				resultStatus = -6
 				return false
 			}
 		} else {
 			Log.Printf("%s\n", err) // Error in accessing
-			resultStatus = -8
+			resultStatus = -7
 			return false
 		}
 	}
@@ -107,7 +100,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -9
+			resultStatus = -8
 			return false
 		}
 
@@ -116,7 +109,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		err = exec.Command(vendorPath, cmdArg...).Run()
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -10
+			resultStatus = -9
 			return false
 		} else {
 			resultStatus = 0
@@ -128,22 +121,15 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -11
+			resultStatus = -10
 			return false
 		}
 		execCracker := exec.Command(vendorPath, cmdArg...)
 
 		// Check generator
-		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR
-		err := checkDir(vendorPath)
-		if err != nil {
-			Log.Printf("%s\n", err)
-			resultStatus = -12
-			return false
-		}
-		vendorPath += _VENDOR_TYPE_GENERATOR + extExecutable
+		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + task.Platform + extExecutable
 		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &vendorPath) == false {
-			resultStatus = -13
+			resultStatus = -11
 			return false
 		}
 
@@ -152,7 +138,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -14
+			resultStatus = -12
 			return false
 		}
 		execGenerator := exec.Command(vendorPath, cmdArg...)
@@ -163,21 +149,21 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = exec.Command("mkfifo", taskPath+"file.fifo").Run()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -15
+				resultStatus = -13
 				return false
 			}
 
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -16
+				resultStatus = -14
 				return false
 			}
 
 			err = execCracker.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -17
+				resultStatus = -15
 				return false
 			}
 
@@ -185,7 +171,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			errC := execCracker.Wait()
 			if (errG != nil) || (errC != nil) {
 
-				resultStatus = -17
+				resultStatus = -15
 
 				if errG != nil {
 					Log.Printf("%s\n", errG)
@@ -195,7 +181,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 					resultStatus += -2
 				}
 
-				// Max resultStatus: -20
+				// Last resultStatus: -18
 
 				return false
 			} else {
@@ -210,14 +196,14 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -21
+				resultStatus = -19
 				return false
 			}
 
 			err = execCracker.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -22
+				resultStatus = -20
 				return false
 			}
 
@@ -225,7 +211,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			errW := w.Close()
 			errC := execCracker.Wait()
 			if (errG != nil) || (errW != nil) || (errC != nil) {
-				resultStatus = -22
+				resultStatus = -20
 
 				if errG != nil {
 					Log.Printf("%s\n", errG)
@@ -238,7 +224,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 					resultStatus += -4
 				}
 
-				// Max resultStatus: -29
+				// Last resultStatus: -27
 
 				return false
 			} else {

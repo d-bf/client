@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 var (
@@ -55,22 +56,40 @@ func getVendor(vendorType *string, vendorName *string, platformId *string, vendo
 	}
 
 	// Process response
-	vendorFile, err := os.OpenFile(*vendorPath+".tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0774)
-	if err != nil {
-		Log.Printf("%s\n", err)
-		vendorFile.Close()
-		return false
-	}
-
-	_, err = io.Copy(vendorFile, resp.Body)
+	vendorDirPath := filepath.Dir(*vendorPath)
+	err = checkDir(vendorDirPath)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false
 	}
 
-	vendorFile.Close()
+	downloadFile, err := os.OpenFile(vendorDirPath+".zip.tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0774)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		downloadFile.Close()
+		return false
+	}
 
-	err = os.Rename(*vendorPath+".tmp", *vendorPath)
+	_, err = io.Copy(downloadFile, resp.Body)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	downloadFile.Close()
+
+	err = os.Rename(vendorDirPath+".zip.tmp", vendorDirPath+".zip")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	err = Uncompress(vendorDirPath+".zip", vendorDirPath+".tmp")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	err = os.Rename(vendorDirPath+".tmp", vendorDirPath)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false

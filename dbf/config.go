@@ -203,13 +203,7 @@ func getBench(benchType int, platformId *string) uint64 {
 		return 0
 	}
 
-	vendorBenchPath := getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + vendorBench + PATH_SEPARATOR + *platformId + PATH_SEPARATOR
-	err := checkDir(vendorBenchPath)
-	if err != nil {
-		Log.Printf("%s\n", err)
-		panic(1)
-	}
-	vendorBenchPath += _VENDOR_TYPE_CRACKER + extExecutable
+	vendorBenchPath := getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + vendorBench + PATH_SEPARATOR + *platformId + PATH_SEPARATOR + *platformId + extExecutable
 
 	if checkVendor(_VENDOR_TYPE_CRACKER, &vendorBench, platformId, &vendorBenchPath) == false {
 		return 0
