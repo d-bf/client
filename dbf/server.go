@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 
 var (
 	client    http.Client
-	respTask  []StructCrackTask
 	serverUrl string
 )
 
@@ -88,6 +88,10 @@ func getVendor(vendorType *string, vendorName *string, platformId *string, vendo
 		Log.Printf("%s\n", err)
 		return false
 	}
+	err = os.RemoveAll(vendorDirPath + ".zip")
+	if err != nil {
+		Log.Printf("%s\n", err)
+	}
 
 	err = os.Rename(vendorDirPath+".tmp", vendorDirPath)
 	if err != nil {
@@ -99,6 +103,8 @@ func getVendor(vendorType *string, vendorName *string, platformId *string, vendo
 }
 
 func GetTask() bool {
+	var respTask []StructCrackTask
+
 	reqJson := `{"client_info":{"platform":` + activePlatStr + `}}`
 
 	req, err := http.NewRequest("POST", serverUrl+_URL_GET_TASK, bytes.NewBufferString(reqJson))
@@ -135,6 +141,8 @@ func GetTask() bool {
 }
 
 func getCrackInfo(reqJson string, crackInfoPath *string) bool {
+	var crackInfo StructCrack
+
 	req, err := http.NewRequest("POST", serverUrl+_URL_GET_CRACK_INFO, bytes.NewBufferString(reqJson))
 	if err != nil {
 		Log.Printf("%s\n", err)
@@ -169,10 +177,95 @@ func getCrackInfo(reqJson string, crackInfoPath *string) bool {
 		Log.Printf("%s\n", err)
 		return false
 	}
-
 	crackInfoFile.Close()
 
-	os.Rename(*crackInfoPath+".tmp", *crackInfoPath)
+	crackInfoJson, err := ioutil.ReadFile(*crackInfoPath + ".tmp")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	err = json.Unmarshal(crackInfoJson, &crackInfo)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	if crackInfo.Has_dep {
+		if GetCrackDep(`{"id":"`+crackInfo.Id+`"}`, crackInfoPath) == false {
+			return false
+		}
+	}
+
+	err = os.Rename(*crackInfoPath+".tmp", *crackInfoPath)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	return true
+}
+
+func GetCrackDep(reqJson string, crackInfoPath *string) bool {
+	req, err := http.NewRequest("POST", serverUrl+_URL_GET_CRACK_DEP, bytes.NewBufferString(reqJson))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	setDefaultHeader(req)
+	req.Header.Set("Accept", "application/octet-stream")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		Log.Printf("Bad response from server:\nStatus: %s\nHeaders: %s\n", resp.Status, resp.Header)
+		return false
+	}
+
+	// Process response
+	crackDepPath := filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "dep"
+
+	downloadFile, err := os.OpenFile(crackDepPath+".zip.tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0774)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		downloadFile.Close()
+		return false
+	}
+
+	_, err = io.Copy(downloadFile, resp.Body)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	downloadFile.Close()
+
+	err = os.Rename(crackDepPath+".zip.tmp", crackDepPath+".zip")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	err = Uncompress(crackDepPath+".zip", crackDepPath+".tmp")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	err = os.RemoveAll(crackDepPath + ".zip")
+	if err != nil {
+		Log.Printf("%s\n", err)
+	}
+
+	err = os.Rename(crackDepPath+".tmp", crackDepPath)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
 
 	return true
 }

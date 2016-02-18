@@ -23,7 +23,9 @@ func saveTask(tasks *[]StructCrackTask) {
 			if err == nil {
 				err = ioutil.WriteFile(taskPath+task.Platform+PATH_SEPARATOR+"task.json", taskJson, 0664)
 				if err == nil {
-					processTask(&task)
+					if processTask(&task) == false {
+						Log.Printf("Error in processing crack #%s \n", task.Crack_id)
+					}
 				} else {
 					Log.Printf("%s\n", err)
 				}

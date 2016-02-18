@@ -20,6 +20,7 @@ type StructCrack struct {
 	Cmd_generator string `json:"cmd_generator"`
 	Cmd_cracker   string `json:"cmd_cracker"`
 	Target        string `json:"target"`
+	Has_dep       bool   `json:"has_dep"`
 }
 
 func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
