@@ -136,10 +136,26 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 
 		// Prepare generator
 		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_generator)
+		if strings.Contains(cmdJsonStr, "DEP_GEN") {
+			// Check if dependency exists in crack location
+			*crackInfoPath = filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "dep" + PATH_SEPARATOR + "dep-gen"
+			if _, err := os.Stat(*crackInfoPath); err == nil { // dep-gen file exists in crack location and is accessible
+				cmdJsonStr = strings.Replace(cmdJsonStr, "DEP_GEN", *crackInfoPath, -1)
+			} else { // Check if dependency exists in generator location
+				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + "dep-gen"
+				if _, err := os.Stat(vendorPath); err == nil { // dep-gen file exists in generator location and is accessible
+					cmdJsonStr = strings.Replace(cmdJsonStr, "DEP_GEN", vendorPath, -1)
+				} else {
+					resultStatus = -12
+					return false
+				}
+				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + task.Platform + extExecutable // Rename back to generator executable
+			}
+		}
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -12
+			resultStatus = -13
 			return false
 		}
 		execGenerator := exec.Command(vendorPath, cmdArg...)
@@ -150,21 +166,21 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = exec.Command("mkfifo", taskPath+"file.fifo").Run()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -13
+				resultStatus = -14
 				return false
 			}
 
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -14
+				resultStatus = -15
 				return false
 			}
 
 			err = execCracker.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -15
+				resultStatus = -16
 				return false
 			}
 
@@ -172,7 +188,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			errC := execCracker.Wait()
 			if (errG != nil) || (errC != nil) {
 
-				resultStatus = -15
+				resultStatus = -16
 
 				if errG != nil {
 					Log.Printf("%s\n", errG)
@@ -182,7 +198,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 					resultStatus += -2
 				}
 
-				// Last resultStatus: -18
+				// Last resultStatus: -19
 
 				return false
 			} else {
@@ -197,14 +213,14 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -19
+				resultStatus = -20
 				return false
 			}
 
 			err = execCracker.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -20
+				resultStatus = -21
 				return false
 			}
 
@@ -212,7 +228,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			errW := w.Close()
 			errC := execCracker.Wait()
 			if (errG != nil) || (errW != nil) || (errC != nil) {
-				resultStatus = -20
+				resultStatus = -21
 
 				if errG != nil {
 					Log.Printf("%s\n", errG)
@@ -225,7 +241,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 					resultStatus += -4
 				}
 
-				// Last resultStatus: -27
+				// Last resultStatus: -28
 
 				return false
 			} else {
@@ -236,4 +252,8 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	}
 
 	return true
+}
+
+func replaceDepGen(cmd *string) {
+
 }
