@@ -92,8 +92,8 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		}
 	}
 
-	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, "IN_FILE", taskPath+"file.fifo")
-	crackerReplacer := strings.NewReplacer("HASH_FILE", *crackInfoPath, "OUT_FILE", taskPath+"result", "IN_FILE", taskPath+"file.fifo")
+	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
+	crackerReplacer := strings.NewReplacer(`"HASH_FILE"`, strconv.Quote(*crackInfoPath), `"OUT_FILE"`, strconv.Quote(taskPath+"result"), `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
 
 	if crack.Type == "embed" { // Embeded
 		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_cracker)
@@ -140,11 +140,11 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			// Check if dependency exists in crack location
 			*crackInfoPath = filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "dep" + PATH_SEPARATOR + "dep-gen"
 			if _, err := os.Stat(*crackInfoPath); err == nil { // dep-gen file exists in crack location and is accessible
-				cmdJsonStr = strings.Replace(cmdJsonStr, "DEP_GEN", *crackInfoPath, -1)
+				cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(*crackInfoPath), -1)
 			} else { // Check if dependency exists in generator location
 				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + "dep-gen"
 				if _, err := os.Stat(vendorPath); err == nil { // dep-gen file exists in generator location and is accessible
-					cmdJsonStr = strings.Replace(cmdJsonStr, "DEP_GEN", vendorPath, -1)
+					cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(vendorPath), -1)
 				} else {
 					resultStatus = -12
 					return false
@@ -252,8 +252,4 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	}
 
 	return true
-}
-
-func replaceDepGen(cmd *string) {
-
 }
