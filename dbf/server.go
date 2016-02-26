@@ -142,7 +142,7 @@ func GetTask() bool {
 }
 
 func getCrackInfo(reqJson string, crackInfoPath *string) bool {
-	var crackInfo StructCrack
+	var crack StructCrack
 
 	req, err := http.NewRequest("POST", serverUrl+_URL_GET_CRACK_INFO, bytes.NewBufferString(reqJson))
 	if err != nil {
@@ -180,20 +180,20 @@ func getCrackInfo(reqJson string, crackInfoPath *string) bool {
 	}
 	crackInfoFile.Close()
 
-	crackInfoJson, err := ioutil.ReadFile(*crackInfoPath + ".tmp")
+	crackJson, err := ioutil.ReadFile(*crackInfoPath + ".tmp")
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false
 	}
 
-	err = json.Unmarshal(crackInfoJson, &crackInfo)
+	err = json.Unmarshal(crackJson, &crack)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		return false
 	}
 
-	if crackInfo.Has_dep {
-		if GetCrackDep(`{"id":"`+crackInfo.Id+`"}`, crackInfoPath) == false {
+	if crack.Has_dep {
+		if GetCrackDep(`{"id":"`+crack.Id+`"}`, crackInfoPath) == false {
 			return false
 		}
 	}
