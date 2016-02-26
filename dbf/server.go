@@ -62,6 +62,7 @@ func getVendor(vendorType *string, vendorName *string, platformId *string, vendo
 		Log.Printf("%s\n", err)
 		return false
 	}
+	os.RemoveAll(vendorDirPath) // Remove last folder
 
 	downloadFile, err := os.OpenFile(vendorDirPath+".zip.tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0774)
 	if err != nil {
