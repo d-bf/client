@@ -68,7 +68,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	/* Process crack */
 	// Check cracker
 	if crack.Cracker != "" {
-		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + crack.Cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + task.Platform + extExecutable
+		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + crack.Cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + _VENDOR_TYPE_CRACKER + extExecutable
 		if checkVendor(_VENDOR_TYPE_CRACKER, &crack.Cracker, &task.Platform, &vendorPath) == false {
 			resultStatus = -5
 			return false
@@ -128,7 +128,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		execCracker := exec.Command(vendorPath, cmdArg...)
 
 		// Check generator
-		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + task.Platform + extExecutable
+		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + _VENDOR_TYPE_GENERATOR + extExecutable
 		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &vendorPath) == false {
 			resultStatus = -11
 			return false
@@ -149,7 +149,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 					resultStatus = -12
 					return false
 				}
-				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + task.Platform + extExecutable // Rename back to generator executable
+				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + _VENDOR_TYPE_GENERATOR + extExecutable // Rename back to generator executable
 			}
 		}
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
