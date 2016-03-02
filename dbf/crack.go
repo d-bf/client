@@ -167,13 +167,14 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 
 		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
-		if crack.Type == "infile" {
-			err = exec.Command("mkfifo", taskPath+"file.fifo").Run()
+		if crack.Type == "stdin" {
+			r, err := execGenerator.StdoutPipe()
 			if err != nil {
 				Log.Printf("%s\n", err)
 				resultStatus = -14
 				return false
 			}
+			execCracker.Stdin = r
 
 			err = execGenerator.Start()
 			if err != nil {
@@ -190,24 +191,24 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			}
 
 			execCracker.Wait()
-			execGenerator.Process.Signal(syscall.SIGINT)
-			err := execGenerator.Wait()
+			r.Close()
+			execGenerator.Process.Signal(syscall.SIGINT) // ^C (Control-C)
+			err = execGenerator.Wait()
 			if err != nil {
-				Log.Printf("%s\n", err)
 				resultStatus = -17
+				Log.Printf("%s\n", err)
 				return false
 			} else {
 				resultStatus = 0
 				return true
 			}
-		} else { // Stdin
-			r, err := execGenerator.StdoutPipe()
+		} else { // Infile
+			err = exec.Command("mkfifo", taskPath+"file.fifo").Run()
 			if err != nil {
 				Log.Printf("%s\n", err)
 				resultStatus = -18
 				return false
 			}
-			execCracker.Stdin = r
 
 			err = execGenerator.Start()
 			if err != nil {
@@ -224,12 +225,11 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			}
 
 			execCracker.Wait()
-			r.Close()
 			execGenerator.Process.Signal(syscall.SIGINT) // ^C (Control-C)
-			err = execGenerator.Wait()
+			err := execGenerator.Wait()
 			if err != nil {
-				resultStatus = -21
 				Log.Printf("%s\n", err)
+				resultStatus = -21
 				return false
 			} else {
 				resultStatus = 0
