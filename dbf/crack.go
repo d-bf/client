@@ -3,7 +3,6 @@ package dbf
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -206,42 +205,47 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 				return true
 			}
 		} else { // Stdin
-			r, w := io.Pipe()
-			execGenerator.Stdout = w
+			r, err := execGenerator.StdoutPipe()
+			if err != nil {
+				Log.Printf("%s\n", err)
+				resultStatus = -20
+				return false
+			}
 			execCracker.Stdin = r
 
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -20
+				resultStatus = -21
 				return false
 			}
 
 			err = execCracker.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -21
+				resultStatus = -22
 				return false
 			}
 
-			errG := execGenerator.Wait()
-			errW := w.Close()
 			errC := execCracker.Wait()
-			if (errG != nil) || (errW != nil) || (errC != nil) {
-				resultStatus = -21
+			errR := r.Close()
+			execGenerator.Process.Kill()
+			errG := execGenerator.Wait()
+			if (errG != nil) || (errR != nil) || (errC != nil) {
+				resultStatus = -22
 
 				if errG != nil {
 					Log.Printf("%s\n", errG)
 					resultStatus += -1
-				} else if errW != nil {
-					Log.Printf("%s\n", errW)
+				} else if errR != nil {
+					Log.Printf("%s\n", errR)
 					resultStatus += -2
 				} else if errC != nil {
 					Log.Printf("%s\n", errC)
 					resultStatus += -4
 				}
 
-				// Last resultStatus: -28
+				// Last resultStatus: -29
 
 				return false
 			} else {
