@@ -33,9 +33,14 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	defer func() {
 		resultByte, err := ioutil.ReadFile(taskPath + "result")
 		if err != nil {
-			Log.Printf("%s\n", err)
 			resultByte = nil
-			resultStatus = -2
+
+			if os.IsNotExist(err) {
+				resultStatus = 0 // Was not cracked
+			} else {
+				Log.Printf("%s\n", err)
+				resultStatus = -2
+			}
 		}
 
 		fmt.Printf("Sending result of crack #%s...\n", task.Crack_id)
@@ -227,11 +232,11 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 				return false
 			}
 
-			errC := execCracker.Wait()
+			execCracker.Wait()
 			errR := r.Close()
-			execGenerator.Process.Kill()
-			errG := execGenerator.Wait()
-			if (errG != nil) || (errR != nil) || (errC != nil) {
+			errG := execGenerator.Process.Release()
+			//			errG := execGenerator.Wait()
+			if (errR != nil) || (errG != nil) {
 				resultStatus = -22
 
 				if errG != nil {
@@ -240,12 +245,9 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 				} else if errR != nil {
 					Log.Printf("%s\n", errR)
 					resultStatus += -2
-				} else if errC != nil {
-					Log.Printf("%s\n", errC)
-					resultStatus += -4
 				}
 
-				// Last resultStatus: -29
+				// Last resultStatus: -25
 
 				return false
 			} else {
