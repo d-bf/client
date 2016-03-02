@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 type StructCrack struct {
@@ -188,22 +189,12 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 				return false
 			}
 
-			errG := execGenerator.Wait()
-			errC := execCracker.Wait()
-			if (errG != nil) || (errC != nil) {
-
-				resultStatus = -16
-
-				if errG != nil {
-					Log.Printf("%s\n", errG)
-					resultStatus += -1
-				} else if errC != nil {
-					Log.Printf("%s\n", errC)
-					resultStatus += -2
-				}
-
-				// Last resultStatus: -19
-
+			execCracker.Wait()
+			execGenerator.Process.Signal(syscall.SIGINT)
+			err := execGenerator.Wait()
+			if err != nil {
+				Log.Printf("%s\n", err)
+				resultStatus = -17
 				return false
 			} else {
 				resultStatus = 0
@@ -213,7 +204,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			r, err := execGenerator.StdoutPipe()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -20
+				resultStatus = -18
 				return false
 			}
 			execCracker.Stdin = r
@@ -221,34 +212,24 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = execGenerator.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -21
+				resultStatus = -19
 				return false
 			}
 
 			err = execCracker.Start()
 			if err != nil {
 				Log.Printf("%s\n", err)
-				resultStatus = -22
+				resultStatus = -20
 				return false
 			}
 
 			execCracker.Wait()
-			errR := r.Close()
-			errG := execGenerator.Process.Release()
-			//			errG := execGenerator.Wait()
-			if (errR != nil) || (errG != nil) {
-				resultStatus = -22
-
-				if errG != nil {
-					Log.Printf("%s\n", errG)
-					resultStatus += -1
-				} else if errR != nil {
-					Log.Printf("%s\n", errR)
-					resultStatus += -2
-				}
-
-				// Last resultStatus: -25
-
+			r.Close()
+			execGenerator.Process.Signal(syscall.SIGINT) // ^C (Control-C)
+			err = execGenerator.Wait()
+			if err != nil {
+				resultStatus = -21
+				Log.Printf("%s\n", err)
 				return false
 			} else {
 				resultStatus = 0
