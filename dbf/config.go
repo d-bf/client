@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -36,6 +37,7 @@ var (
 	regexpBenchValue  *regexp.Regexp
 	regexpBenchFloat  *regexp.Regexp
 	regexpBenchSuffix *regexp.Regexp
+	wgBench           sync.WaitGroup
 )
 
 type StructActivePlatform struct {
@@ -140,11 +142,23 @@ func check() {
 		for i, platform := range confDbf.Platform {
 			if platform.Active != 0 { // Is active
 				if strings.HasPrefix(platform.Id, "cpu") { // CPU
-					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_CPU, &platform.Id)
+					wgBench.Add(1)
+					go func(i int, platformId string) {
+						confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_CPU, &platformId)
+						wgBench.Done()
+					}(i, platform.Id)
 				} else if strings.HasSuffix(platform.Id, "_amd") { // GPU AMD
-					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_AMD, &platform.Id)
+					wgBench.Add(1)
+					go func(i int, platformId string) {
+						confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_AMD, &platformId)
+						wgBench.Done()
+					}(i, platform.Id)
 				} else if strings.HasSuffix(platform.Id, "_nv") { // GPU Nvidia
-					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_NV, &platform.Id)
+					wgBench.Add(1)
+					go func(i int, platformId string) {
+						confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_NV, &platformId)
+						wgBench.Done()
+					}(i, platform.Id)
 				}
 
 				if confDbf.Platform[i].Benchmark > 0 {
@@ -155,6 +169,8 @@ func check() {
 				}
 			}
 		}
+
+		wgBench.Wait() // Wait for all benchmarks to finish
 
 		activePlatByte, err := json.Marshal(activePlat)
 		if err != nil {
