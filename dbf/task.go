@@ -28,9 +28,6 @@ func saveTask(tasks *[]StructCrackTask) {
 				if err == nil {
 					wg.Add(1)
 					go processTask(task)
-					//					if processTask(&task) == false {
-					//						Log.Printf("Error in processing crack #%s \n", task.Crack_id)
-					//					}
 				} else {
 					Log.Printf("%s\n", err)
 				}
@@ -45,8 +42,14 @@ func saveTask(tasks *[]StructCrackTask) {
 	wg.Wait() // Wait for all tasks to finish
 }
 
-func processTask(task StructCrackTask) bool {
-	defer wg.Done()
+func processTask(task StructCrackTask) (status bool) {
+	defer func() {
+		if status == false {
+			Log.Printf("Error in processing crack #%s \n", task.Crack_id)
+		}
+
+		wg.Done()
+	}()
 
 	crackInfoPath := getPath(_PATH_CRACK) + task.Crack_id + PATH_SEPARATOR
 	err := checkDir(crackInfoPath)
