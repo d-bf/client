@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sync"
 )
 
 type StructCrackTask struct {
@@ -13,6 +14,8 @@ type StructCrackTask struct {
 	Offset   string `json:"offset"`
 	Platform string `json:"platform"`
 }
+
+var wg sync.WaitGroup
 
 func saveTask(tasks *[]StructCrackTask) {
 	taskPath := getPath(_PATH_TASK)
@@ -23,9 +26,11 @@ func saveTask(tasks *[]StructCrackTask) {
 			if err == nil {
 				err = ioutil.WriteFile(taskPath+task.Platform+PATH_SEPARATOR+"task.json", taskJson, 0664)
 				if err == nil {
-					if processTask(&task) == false {
-						Log.Printf("Error in processing crack #%s \n", task.Crack_id)
-					}
+					wg.Add(1)
+					go processTask(task)
+					//					if processTask(&task) == false {
+					//						Log.Printf("Error in processing crack #%s \n", task.Crack_id)
+					//					}
 				} else {
 					Log.Printf("%s\n", err)
 				}
@@ -36,9 +41,13 @@ func saveTask(tasks *[]StructCrackTask) {
 			Log.Printf("%s\n", err)
 		}
 	}
+
+	wg.Wait() // Wait for all tasks to finish
 }
 
-func processTask(task *StructCrackTask) bool {
+func processTask(task StructCrackTask) bool {
+	defer wg.Done()
+
 	crackInfoPath := getPath(_PATH_CRACK) + task.Crack_id + PATH_SEPARATOR
 	err := checkDir(crackInfoPath)
 	if err != nil {
@@ -62,5 +71,5 @@ func processTask(task *StructCrackTask) bool {
 	}
 
 	// Process crack
-	return processCrack(task, &crackInfoPath)
+	return processCrack(&task, &crackInfoPath)
 }
