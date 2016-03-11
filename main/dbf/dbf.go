@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var timer time.Duration = 1
+
 func deferPanic() {
 	if panicVal := recover(); panicVal != nil { // Recovering from panic
 		if exitCode, ok := panicVal.(int); ok { // Panic value is integer
@@ -52,11 +54,28 @@ func main() {
 	initialize()
 	term.Clear()
 
+	dbf.ResetTimer = false
+
 	for { // Infinite loop
 		fmt.Println("Checking for new task from server...")
 		dbf.GetTask()
 		fmt.Println("Wait before checking for next task...")
-		time.Sleep(15 * time.Second)
+		time.Sleep(getTimer() * time.Second)
 		term.Clear()
 	}
+}
+
+func getTimer() time.Duration {
+	if dbf.ResetTimer {
+		timer = 1
+		dbf.ResetTimer = false
+	} else {
+		timer++
+	}
+
+	if timer > 150 {
+		timer = 150
+	}
+
+	return timer * 4
 }

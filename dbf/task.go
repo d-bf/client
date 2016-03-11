@@ -15,7 +15,10 @@ type StructCrackTask struct {
 	Platform string `json:"platform"`
 }
 
-var wgTask sync.WaitGroup
+var (
+	ResetTimer bool
+	wgTask     sync.WaitGroup
+)
 
 func saveTask(tasks *[]StructCrackTask) {
 	taskPath := getPath(_PATH_TASK)
@@ -44,7 +47,9 @@ func saveTask(tasks *[]StructCrackTask) {
 
 func processTask(task StructCrackTask) (status bool) {
 	defer func() {
-		if status == false {
+		if status {
+			ResetTimer = true
+		} else {
 			Log.Printf("Error in processing crack #%s \n", task.Crack_id)
 		}
 
