@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/d-bf/client/dbf"
 	"github.com/d-bf/client/term"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -109,11 +110,16 @@ func getTimer() uint {
 		timer++
 	}
 
-	if timer > 150 {
-		timer = 150
+	if timer > 29 { // 30 * 4 = 2 minutes
+		timer = uint(random(30, 75)) // * 4 = (2 minutes, 5 minutes)
 	}
 
 	return timer * 4
+}
+
+func random(min, max int) int {
+	rand.Seed(time.Now().Unix())
+	return rand.Intn(max-min) + min
 }
 
 func showRemainingTime(timeout uint) {
