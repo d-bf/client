@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 )
 
+const _DEFAULT_URL_API = "https://d-bf.ir/api"
+
 type StructConfDbf struct {
 	Server   StructConfDbfServer     `json:"server"`
 	Platform []StructConfDbfPlatform `json:"platform"`
@@ -25,7 +27,7 @@ type StructConfDbfPlatform struct {
 func createConfDbf() error {
 	confDbf = StructConfDbf{
 		Server: StructConfDbfServer{
-			Url_api:    "",
+			Url_api:    _DEFAULT_URL_API,
 			Version:    "v1",
 			Ssl_verify: 0,
 		},
