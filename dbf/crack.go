@@ -13,14 +13,41 @@ import (
 )
 
 type StructCrack struct {
-	Id            string `json:"id"`
-	Type          string `json:"type"`
-	Generator     string `json:"generator"`
-	Cracker       string `json:"cracker"`
-	Cmd_generator string `json:"cmd_generator"`
-	Cmd_cracker   string `json:"cmd_cracker"`
-	Target        string `json:"target"`
-	Has_dep       bool   `json:"has_dep"`
+	Id         string            `json:"id"`
+	Generator  string            `json:"generator"`
+	Gen_config []string          `json:"gen_config"`
+	Algo_id    string            `json:"algo_id"`
+	Algo_name  string            `json:"algo_name"`
+	Len_min    string            `json:"len_min"`
+	Len_max    string            `json:"len_max"`
+	Charset1   string            `json:"charset1"`
+	Charset2   string            `json:"charset2"`
+	Charset3   string            `json:"charset3"`
+	Charset4   string            `json:"charset4"`
+	Mask       string            `json:"mask"`
+	Target     string            `json:"target"`
+	Has_dep    bool              `json:"has_dep"`
+	info       []StructCrackInfo `json:"has_dep"`
+}
+
+type StructCrackInfo struct {
+	Platform     string `json:"platform"`
+	Cracker      string `json:"cracker"`
+	Internal_gen bool   `json:"internal_gen"`
+}
+
+type StructCrackerNEmbed struct {
+	Stdin  []string `json:"stdin"`
+	Infile []string `json:"infile"`
+}
+
+type StructCrackerEmbed struct {
+	Generator []StructCrackerGen `json:"generator"`
+}
+
+type StructCrackerGen struct {
+	Name string   `json:"name"`
+	Args []string `json:"args"`
 }
 
 func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
@@ -72,12 +99,25 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 
 	/* Process crack */
 	// Check cracker
-	if crack.Cracker != "" {
-		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + crack.Cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + _VENDOR_TYPE_CRACKER + extExecutable
-		if checkVendor(_VENDOR_TYPE_CRACKER, &crack.Cracker, &task.Platform, &vendorPath) == false {
-			resultStatus = -5
-			return false
+	var cracker string
+	var internal_gen bool
+	for _, crackInfo := range crack.info {
+		if crackInfo.Platform == task.Platform {
+			cracker = crackInfo.Cracker
+			internal_gen = crackInfo.Internal_gen
+			break
 		}
+	}
+
+	if cracker == "" {
+		resultStatus = -0
+		return false
+	}
+
+	vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + _VENDOR_TYPE_CRACKER + extExecutable
+	if checkVendor(_VENDOR_TYPE_CRACKER, &cracker, &task.Platform, &vendorPath) == false {
+		resultStatus = -5
+		return false
 	}
 
 	// Check hashfile
@@ -100,8 +140,46 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
 	crackerReplacer := strings.NewReplacer(`"HASH_FILE"`, strconv.Quote(*crackInfoPath), `"OUT_FILE"`, strconv.Quote(taskPath+"result"), `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
 
-	if crack.Type == "embed" { // Embeded
-		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_cracker)
+	if internal_gen { // Embeded
+		vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + "info.json"
+		crackerEmbedJson, err := ioutil.ReadFile(vendorPath)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -0
+			return false
+		}
+
+		var crackerEmbed StructCrackerEmbed
+		err = json.Unmarshal(crackerEmbedJson, &crackerEmbed)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -0
+			return false
+		}
+
+		brk := false 
+		for _, crackerGen := range crackerEmbed.Generator {
+			if crackerGen.Name == crack.Generator {
+				cmdArg = crackerGen.Args
+				brk = true
+				break
+			}
+		}
+		if brk == false {
+			Log.Printf("No args for cracker '%s' in info.json!\n", cracker)
+			resultStatus = -0
+			return false
+		}
+
+		cmdJsonByte, err := json.Marshal(&cmdArg)
+		if err != nil {
+			Log.Printf("%s\n", err)
+			resultStatus = -0
+			return false
+		}
+		cmdJsonStr = string(cmdJsonByte)
+
+		cmdJsonStr = generatorReplacer.Replace(cmdJsonStr)
 		cmdJsonStr = crackerReplacer.Replace(cmdJsonStr)
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
@@ -112,6 +190,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 
 		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
 
+		vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + _VENDOR_TYPE_CRACKER + extExecutable
 		err = exec.Command(vendorPath, cmdArg...).Run()
 		if err != nil {
 			Log.Printf("%s\n", err)
