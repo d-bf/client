@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
+	//	"syscall"
 )
 
 type StructCrack struct {
@@ -27,7 +27,7 @@ type StructCrack struct {
 	Mask       string            `json:"mask"`
 	Target     string            `json:"target"`
 	Has_dep    bool              `json:"has_dep"`
-	info       []StructCrackInfo `json:"has_dep"`
+	Info       []StructCrackInfo `json:"info"`
 }
 
 type StructCrackInfo struct {
@@ -47,7 +47,7 @@ type StructCrackerEmbed struct {
 
 type StructCrackerGen struct {
 	Name string   `json:"name"`
-	Args []string `json:"args"`
+	Arg  []string `json:"arg"`
 }
 
 func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
@@ -71,7 +71,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			}
 		}
 
-		fmt.Printf("Sending result of crack #%s...\n", task.Crack_id)
+		fmt.Printf("Sending result of crack #%s (status: %d)...\n", task.Crack_id, resultStatus)
 
 		if sendResult(`[{"crack_id":"`+task.Crack_id+`","start":"`+task.Start+`","offset":"`+task.Offset+`","result":"`+string(resultByte)+`","status":"`+strconv.Itoa(resultStatus)+`"}]`) == true {
 			fmt.Printf("Removing task info of crack #%s (%s)...\n", task.Crack_id, task.Platform)
@@ -101,7 +101,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	// Check cracker
 	var cracker string
 	var internal_gen bool
-	for _, crackInfo := range crack.info {
+	for _, crackInfo := range crack.Info {
 		if crackInfo.Platform == task.Platform {
 			cracker = crackInfo.Cracker
 			internal_gen = crackInfo.Internal_gen
@@ -110,13 +110,13 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	}
 
 	if cracker == "" {
-		resultStatus = -0
+		resultStatus = -5
 		return false
 	}
 
 	vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_CRACKER + PATH_SEPARATOR + cracker + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + _VENDOR_TYPE_CRACKER + extExecutable
 	if checkVendor(_VENDOR_TYPE_CRACKER, &cracker, &task.Platform, &vendorPath) == false {
-		resultStatus = -5
+		resultStatus = -6
 		return false
 	}
 
@@ -127,54 +127,93 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 			err = ioutil.WriteFile(*crackInfoPath, []byte(crack.Target), 0664)
 			if err != nil {
 				Log.Printf("%s\n", err) // Error in creating
-				resultStatus = -6
+				resultStatus = -7
 				return false
 			}
 		} else {
 			Log.Printf("%s\n", err) // Error in accessing
-			resultStatus = -7
+			resultStatus = -8
 			return false
 		}
 	}
 
-	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
-	crackerReplacer := strings.NewReplacer(`"HASH_FILE"`, strconv.Quote(*crackInfoPath), `"OUT_FILE"`, strconv.Quote(taskPath+"result"), `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
+	/* Quote question mark in mask! */
+	crack.Mask = strings.Replace(crack.Mask, "?", "??", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??l", "?l", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??u", "?u", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??d", "?d", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??s", "?s", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??a", "?a", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??b", "?b", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??1", "?1", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??2", "?2", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??3", "?3", -1)
+	crack.Mask = strings.Replace(crack.Mask, "??4", "?4", -1)
+
+	/* Handle replacement of custom charsets */
+	var char1, char2, char3, char4 string
+	if len(crack.Charset1) > 0 {
+		char1 = `,"-1",` + strconv.Quote(strings.Replace(crack.Charset1, "?", "??", -1))
+	} else {
+		char1 = ``
+	}
+
+	if len(crack.Charset2) > 0 {
+		char2 = `,"-2",` + strconv.Quote(strings.Replace(crack.Charset2, "?", "??", -1))
+	} else {
+		char2 = ``
+	}
+
+	if len(crack.Charset3) > 0 {
+		char3 = `,"-3",` + strconv.Quote(strings.Replace(crack.Charset3, "?", "??", -1))
+	} else {
+		char3 = ``
+	}
+
+	if len(crack.Charset4) > 0 {
+		char4 = `,"-4",` + strconv.Quote(strings.Replace(crack.Charset4, "?", "??", -1))
+	} else {
+		char4 = ``
+	}
+
+	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, "LEN_MIN", crack.Len_min, "LEN_MAX", crack.Len_max, `,"CHAR1"`, char1, `,"CHAR2"`, char2, `,"CHAR3"`, char3, `,"CHAR4"`, char4, "MASK", crack.Mask, `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
+	crackerReplacer := strings.NewReplacer("ALGO_ID", crack.Algo_id, "ALGO_NAME", crack.Algo_name, `"HASH_FILE"`, strconv.Quote(*crackInfoPath), `"OUT_FILE"`, strconv.Quote(taskPath+"result"), `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
 
 	if internal_gen { // Embeded
 		vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + "info.json"
-		crackerEmbedJson, err := ioutil.ReadFile(vendorPath)
+		crackerJson, err := ioutil.ReadFile(vendorPath)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -0
+			resultStatus = -9
 			return false
 		}
 
 		var crackerEmbed StructCrackerEmbed
-		err = json.Unmarshal(crackerEmbedJson, &crackerEmbed)
+		err = json.Unmarshal(crackerJson, &crackerEmbed)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -0
+			resultStatus = -10
 			return false
 		}
 
-		brk := false 
+		brk := false
 		for _, crackerGen := range crackerEmbed.Generator {
 			if crackerGen.Name == crack.Generator {
-				cmdArg = crackerGen.Args
+				cmdArg = crackerGen.Arg
 				brk = true
 				break
 			}
 		}
 		if brk == false {
 			Log.Printf("No args for cracker '%s' in info.json!\n", cracker)
-			resultStatus = -0
+			resultStatus = -11
 			return false
 		}
 
 		cmdJsonByte, err := json.Marshal(&cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -0
+			resultStatus = -12
 			return false
 		}
 		cmdJsonStr = string(cmdJsonByte)
@@ -184,7 +223,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -8
+			resultStatus = -13
 			return false
 		}
 
@@ -194,116 +233,117 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		err = exec.Command(vendorPath, cmdArg...).Run()
 		if err != nil {
 			Log.Printf("%s\n", err)
-			resultStatus = -9
+			resultStatus = -14
 			return false
 		} else {
 			resultStatus = 0
 			return true
 		}
-	} else { // Not embeded
-		// Prepare cracker
-		cmdJsonStr = crackerReplacer.Replace(crack.Cmd_cracker)
-		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
-		if err != nil {
-			Log.Printf("%s\n", err)
-			resultStatus = -10
-			return false
-		}
-		execCracker := exec.Command(vendorPath, cmdArg...)
-
-		// Check generator
-		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + _VENDOR_TYPE_GENERATOR + extExecutable
-		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &vendorPath) == false {
-			resultStatus = -11
-			return false
-		}
-
-		// Prepare generator
-		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_generator)
-		if strings.Contains(cmdJsonStr, "DEP_GEN") {
-			// Check if dependency exists in crack location
-			*crackInfoPath = filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "dep" + PATH_SEPARATOR + "dep-gen"
-			if _, err := os.Stat(*crackInfoPath); err == nil { // dep-gen file exists in crack location and is accessible
-				cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(*crackInfoPath), -1)
-			} else { // Check if dependency exists in generator location
-				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + "dep-gen"
-				if _, err := os.Stat(vendorPath); err == nil { // dep-gen file exists in generator location and is accessible
-					cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(vendorPath), -1)
-				} else {
-					resultStatus = -12
-					return false
-				}
-				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + _VENDOR_TYPE_GENERATOR + extExecutable // Rename back to generator executable
-			}
-		}
-		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
-		if err != nil {
-			Log.Printf("%s\n", err)
-			resultStatus = -13
-			return false
-		}
-		execGenerator := exec.Command(vendorPath, cmdArg...)
-
-		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
-
-		if crack.Type == "stdin" {
-			r, err := execGenerator.StdoutPipe()
-			if err != nil {
-				Log.Printf("%s\n", err)
-				resultStatus = -14
-				return false
-			}
-			execCracker.Stdin = r
-
-			err = execGenerator.Start()
-			if err != nil {
-				Log.Printf("%s\n", err)
-				resultStatus = -15
-				return false
-			}
-
-			err = execCracker.Start()
-			if err != nil {
-				Log.Printf("%s\n", err)
-				resultStatus = -16
-				return false
-			}
-
-			execCracker.Wait()
-			execGenerator.Process.Signal(syscall.SIGINT) // ^C (Control-C)
-			r.Close()
-
-			resultStatus = 0
-			return true
-		} else { // Infile
-			err = exec.Command("mkfifo", taskPath+"file.fifo").Run()
-			if err != nil {
-				Log.Printf("%s\n", err)
-				resultStatus = -18
-				return false
-			}
-
-			err = execGenerator.Start()
-			if err != nil {
-				Log.Printf("%s\n", err)
-				resultStatus = -19
-				return false
-			}
-
-			err = execCracker.Start()
-			if err != nil {
-				Log.Printf("%s\n", err)
-				resultStatus = -20
-				return false
-			}
-
-			execCracker.Wait()
-			execGenerator.Process.Signal(syscall.SIGINT) // ^C (Control-C)
-
-			resultStatus = 0
-			return true
-		}
 	}
+	//	 else { // Not embeded
+	//		// Prepare cracker
+	//		cmdJsonStr = crackerReplacer.Replace(crack.Cmd_cracker)
+	//		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
+	//		if err != nil {
+	//			Log.Printf("%s\n", err)
+	//			resultStatus = -10
+	//			return false
+	//		}
+	//		execCracker := exec.Command(vendorPath, cmdArg...)
+	//
+	//		// Check generator
+	//		vendorPath = getPath(_PATH_VENDOR) + _VENDOR_TYPE_GENERATOR + PATH_SEPARATOR + crack.Generator + PATH_SEPARATOR + task.Platform + PATH_SEPARATOR + _VENDOR_TYPE_GENERATOR + extExecutable
+	//		if checkVendor(_VENDOR_TYPE_GENERATOR, &crack.Generator, &task.Platform, &vendorPath) == false {
+	//			resultStatus = -11
+	//			return false
+	//		}
+	//
+	//		// Prepare generator
+	//		cmdJsonStr = generatorReplacer.Replace(crack.Cmd_generator)
+	//		if strings.Contains(cmdJsonStr, "DEP_GEN") {
+	//			// Check if dependency exists in crack location
+	//			*crackInfoPath = filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "dep" + PATH_SEPARATOR + "dep-gen"
+	//			if _, err := os.Stat(*crackInfoPath); err == nil { // dep-gen file exists in crack location and is accessible
+	//				cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(*crackInfoPath), -1)
+	//			} else { // Check if dependency exists in generator location
+	//				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + "dep-gen"
+	//				if _, err := os.Stat(vendorPath); err == nil { // dep-gen file exists in generator location and is accessible
+	//					cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(vendorPath), -1)
+	//				} else {
+	//					resultStatus = -12
+	//					return false
+	//				}
+	//				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + _VENDOR_TYPE_GENERATOR + extExecutable // Rename back to generator executable
+	//			}
+	//		}
+	//		err = json.Unmarshal([]byte(cmdJsonStr), &cmdArg)
+	//		if err != nil {
+	//			Log.Printf("%s\n", err)
+	//			resultStatus = -13
+	//			return false
+	//		}
+	//		execGenerator := exec.Command(vendorPath, cmdArg...)
+	//
+	//		fmt.Printf("Performing crack #%s...\n", task.Crack_id)
+	//
+	//		if crack.Type == "stdin" {
+	//			r, err := execGenerator.StdoutPipe()
+	//			if err != nil {
+	//				Log.Printf("%s\n", err)
+	//				resultStatus = -14
+	//				return false
+	//			}
+	//			execCracker.Stdin = r
+	//
+	//			err = execGenerator.Start()
+	//			if err != nil {
+	//				Log.Printf("%s\n", err)
+	//				resultStatus = -15
+	//				return false
+	//			}
+	//
+	//			err = execCracker.Start()
+	//			if err != nil {
+	//				Log.Printf("%s\n", err)
+	//				resultStatus = -16
+	//				return false
+	//			}
+	//
+	//			execCracker.Wait()
+	//			execGenerator.Process.Signal(syscall.SIGINT) // ^C (Control-C)
+	//			r.Close()
+	//
+	//			resultStatus = 0
+	//			return true
+	//		} else { // Infile
+	//			err = exec.Command("mkfifo", taskPath+"file.fifo").Run()
+	//			if err != nil {
+	//				Log.Printf("%s\n", err)
+	//				resultStatus = -18
+	//				return false
+	//			}
+	//
+	//			err = execGenerator.Start()
+	//			if err != nil {
+	//				Log.Printf("%s\n", err)
+	//				resultStatus = -19
+	//				return false
+	//			}
+	//
+	//			err = execCracker.Start()
+	//			if err != nil {
+	//				Log.Printf("%s\n", err)
+	//				resultStatus = -20
+	//				return false
+	//			}
+	//
+	//			execCracker.Wait()
+	//			execGenerator.Process.Signal(syscall.SIGINT) // ^C (Control-C)
+	//
+	//			resultStatus = 0
+	//			return true
+	//		}
+	//	}
 
 	return true
 }
