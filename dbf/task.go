@@ -31,7 +31,7 @@ func saveTask(tasks *[]StructCrackTask) {
 				if err == nil {
 					if checkCrackInfo(&task) {
 						wgTask.Add(1)
-						go processTask(task)
+						go processCrack(task)
 					}
 				} else {
 					Log.Printf("%s\n", err)
@@ -71,19 +71,4 @@ func checkCrackInfo(task *StructCrackTask) bool {
 	}
 
 	return true
-}
-
-func processTask(task StructCrackTask) (status bool) {
-	defer func() {
-		if status {
-			ResetTimer = true
-		} else {
-			Log.Printf("Error in processing crack #%s (%s)\n", task.Crack_id, task.Platform)
-		}
-
-		wgTask.Done()
-	}()
-
-	// Process crack
-	return processCrack(&task)
 }

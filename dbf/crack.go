@@ -55,7 +55,7 @@ type StructCrackerGen struct {
 	Arg  []string `json:"arg"`
 }
 
-func processCrack(task *StructCrackTask) bool {
+func processCrack(task StructCrackTask) (status bool) {
 	var jsonByte []byte
 	var vendorPath, cmdJsonStr string
 	var cmdArg []string
@@ -78,12 +78,22 @@ func processCrack(task *StructCrackTask) bool {
 		fmt.Printf("Sending result of crack #%s (%s, status: %d)...\n", task.Crack_id, task.Platform, resultStatus)
 
 		if sendResult(`[{"crack_id":"`+task.Crack_id+`","start":"`+task.Start+`","offset":"`+task.Offset+`","result":"`+string(resultByte)+`","status":"`+strconv.Itoa(resultStatus)+`"}]`) == true {
-			fmt.Printf("Removing task info of crack #%s (%s)...\n", task.Crack_id, task.Platform)
+			fmt.Printf("Remove current task info of crack #%s (%s)...\n", task.Crack_id, task.Platform)
 			err = os.RemoveAll(taskPath)
 			if err != nil {
 				Log.Printf("%s\n", err)
 			}
+		} else {
+			Log.Printf("Error in sending result of crack #%s (%s)\n", task.Crack_id, task.Platform)
 		}
+
+		if status {
+			ResetTimer = true
+		} else {
+			Log.Printf("Error in processing crack #%s (%s)\n", task.Crack_id, task.Platform)
+		}
+
+		wgTask.Done()
 	}()
 
 	crackInfoPath := getPath(_PATH_CRACK) + task.Crack_id + PATH_SEPARATOR + "crack.json"
