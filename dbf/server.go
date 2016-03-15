@@ -24,11 +24,53 @@ func initServer() {
 		},
 	}
 
+	if validateUrl() == false {
+		Log.Printf("Server URL is not valid! Please enter a valid URL in url_api in config file: %s\n", getPath(_PATH_CONF_FILE))
+		panic(1)
+	}
+
 	serverUrl = confDbf.Server.Url_api + "/" + confDbf.Server.Version + "/"
 }
 
 func setDefaultHeader(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
+}
+
+func validateUrl() bool {
+	req, err := http.NewRequest("POST", confDbf.Server.Url_api, bytes.NewBufferString(`{"ping":"name"}`))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	setDefaultHeader(req)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		Log.Printf("Bad response from server:\nStatus: %s\nHeaders: %s\n", resp.Status, resp.Header)
+		return false
+	}
+
+	// Process response
+	var pingResponse string
+	err = json.NewDecoder(resp.Body).Decode(&pingResponse)
+	if err != nil {
+		Log.Printf("%s\n", err)
+		return false
+	}
+
+	if pingResponse == "d-bf" {
+		return true
+	} else {
+		return false
+	}
 }
 
 func getVendor(vendorType *string, vendorName *string, platformId *string, vendorPath *string) bool {

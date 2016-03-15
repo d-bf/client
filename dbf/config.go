@@ -84,11 +84,8 @@ func check() {
 
 			// Create initial config file
 			err = createConfDbf()
-			if err == nil {
-				fmt.Printf("Please enter server's URL in url_api in config file: %s\n", getPath(_PATH_CONF_FILE))
-				panic(0)
-			} else { // Can't create
-				Log.Printf("%s\n", err)
+			if err != nil {
+				Log.Printf("%s\n", err) // Can't create
 				panic(1)
 			}
 		} else {
