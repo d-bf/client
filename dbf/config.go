@@ -92,94 +92,95 @@ func check() {
 			Log.Printf("%s\n", err) // Error in accessing
 			panic(1)
 		}
-	} else { // Sync config file
-		fmt.Println("Synchronizing config file...")
+	}
 
-		err := checkDir(getPath(_PATH_VENDOR))
-		if err != nil {
-			Log.Printf("%s\n", err)
-			panic(1)
-		}
+	// Sync config file
+	fmt.Println("Synchronizing config file...")
 
-		err = checkDir(getPath(_PATH_TASK))
-		if err != nil {
-			Log.Printf("%s\n", err)
-			panic(1)
-		}
+	err = checkDir(getPath(_PATH_VENDOR))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		panic(1)
+	}
 
-		err = checkDir(getPath(_PATH_CRACK))
-		if err != nil {
-			Log.Printf("%s\n", err)
-			panic(1)
-		}
+	err = checkDir(getPath(_PATH_TASK))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		panic(1)
+	}
 
-		setConfDbf()
+	err = checkDir(getPath(_PATH_CRACK))
+	if err != nil {
+		Log.Printf("%s\n", err)
+		panic(1)
+	}
 
-		initServer()
+	setConfDbf()
 
-		// Init regexp
-		regexpBenchValue, err = regexp.Compile("\\d*\\.?\\d*[A-Za-z]?")
-		if err != nil {
-			Log.Printf("%s\n", err)
-			panic(1)
-		}
-		regexpBenchFloat, err = regexp.Compile("\\d*\\.?\\d*")
-		if err != nil {
-			Log.Printf("%s\n", err)
-			panic(1)
-		}
-		regexpBenchSuffix, err = regexp.Compile("[A-Za-z]$")
-		if err != nil {
-			Log.Printf("%s\n", err)
-			panic(1)
-		}
+	initServer()
 
-		// Check default vendor files and update benchmarks
-		var activePlat []StructActivePlatform
-		for i, platform := range confDbf.Platform {
-			if platform.Active != 0 { // Is active
-				if strings.HasPrefix(platform.Id, "cpu") { // CPU
-					wgBench.Add(1)
-					go func(i int, platformId string) {
-						confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_CPU, &platformId)
-						wgBench.Done()
-					}(i, platform.Id)
-				} else if strings.HasSuffix(platform.Id, "_amd") { // GPU AMD
-					wgBench.Add(1)
-					go func(i int, platformId string) {
-						confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_AMD, &platformId)
-						wgBench.Done()
-					}(i, platform.Id)
-				} else if strings.HasSuffix(platform.Id, "_nv") { // GPU Nvidia
-					wgBench.Add(1)
-					go func(i int, platformId string) {
-						confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_NV, &platformId)
-						wgBench.Done()
-					}(i, platform.Id)
-				}
+	// Init regexp
+	regexpBenchValue, err = regexp.Compile("\\d*\\.?\\d*[A-Za-z]?")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		panic(1)
+	}
+	regexpBenchFloat, err = regexp.Compile("\\d*\\.?\\d*")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		panic(1)
+	}
+	regexpBenchSuffix, err = regexp.Compile("[A-Za-z]$")
+	if err != nil {
+		Log.Printf("%s\n", err)
+		panic(1)
+	}
 
-				if confDbf.Platform[i].Benchmark > 0 {
-					activePlat = append(activePlat, StructActivePlatform{
-						Id:        platform.Id,
-						Benchmark: confDbf.Platform[i].Benchmark,
-					})
-				}
+	// Check default vendor files and update benchmarks
+	var activePlat []StructActivePlatform
+	for i, platform := range confDbf.Platform {
+		if platform.Active != 0 { // Is active
+			if strings.HasPrefix(platform.Id, "cpu") { // CPU
+				wgBench.Add(1)
+				go func(i int, platformId string) {
+					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_CPU, &platformId)
+					wgBench.Done()
+				}(i, platform.Id)
+			} else if strings.HasSuffix(platform.Id, "_amd") { // GPU AMD
+				wgBench.Add(1)
+				go func(i int, platformId string) {
+					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_AMD, &platformId)
+					wgBench.Done()
+				}(i, platform.Id)
+			} else if strings.HasSuffix(platform.Id, "_nv") { // GPU Nvidia
+				wgBench.Add(1)
+				go func(i int, platformId string) {
+					confDbf.Platform[i].Benchmark = getBench(_BENCH_TYPE_GPU_NV, &platformId)
+					wgBench.Done()
+				}(i, platform.Id)
+			}
+
+			if confDbf.Platform[i].Benchmark > 0 {
+				activePlat = append(activePlat, StructActivePlatform{
+					Id:        platform.Id,
+					Benchmark: confDbf.Platform[i].Benchmark,
+				})
 			}
 		}
-
-		wgBench.Wait() // Wait for all benchmarks to finish
-
-		activePlatByte, err := json.Marshal(activePlat)
-		if err != nil {
-			Log.Printf("%s\n", err)
-		}
-		activePlatStr = string(activePlatByte)
-
-		fmt.Println("Updating config file...")
-
-		// Update config file
-		saveConfDbf()
 	}
+
+	wgBench.Wait() // Wait for all benchmarks to finish
+
+	activePlatByte, err := json.Marshal(activePlat)
+	if err != nil {
+		Log.Printf("%s\n", err)
+	}
+	activePlatStr = string(activePlatByte)
+
+	fmt.Println("Updating config file...")
+
+	// Update config file
+	saveConfDbf()
 }
 
 // checkDir checks if dir exists and is accessible, otherwise tries to create it
