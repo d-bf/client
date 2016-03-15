@@ -137,7 +137,6 @@ func check() {
 	}
 
 	// Check default vendor files and update benchmarks
-	var activePlat []StructActivePlatform
 	for i, platform := range confDbf.Platform {
 		if platform.Active != 0 { // Is active
 			if strings.HasPrefix(platform.Id, "cpu") { // CPU
@@ -159,7 +158,14 @@ func check() {
 					wgBench.Done()
 				}(i, platform.Id)
 			}
+		}
+	}
 
+	wgBench.Wait() // Wait for all benchmarks to finish
+
+	var activePlat []StructActivePlatform
+	for i, platform := range confDbf.Platform {
+		if platform.Active != 0 { // Is active
 			if confDbf.Platform[i].Benchmark > 0 {
 				activePlat = append(activePlat, StructActivePlatform{
 					Id:        platform.Id,
@@ -168,8 +174,6 @@ func check() {
 			}
 		}
 	}
-
-	wgBench.Wait() // Wait for all benchmarks to finish
 
 	activePlatByte, err := json.Marshal(activePlat)
 	if err != nil {
