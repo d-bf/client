@@ -25,6 +25,7 @@ func saveTask(tasks *[]StructCrackTask) {
 	for _, task := range *tasks {
 		taskJson, err := json.Marshal(&task)
 		if err == nil {
+			os.RemoveAll(taskPath + task.Platform) // Remove previous task if exists
 			err = checkDir(taskPath + task.Platform)
 			if err == nil {
 				err = ioutil.WriteFile(taskPath+task.Platform+PATH_SEPARATOR+"task.json", taskJson, 0664)

@@ -1,6 +1,7 @@
 package dbf
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -66,9 +67,10 @@ func processCrack(task StructCrackTask) (status bool) {
 
 	defer func() {
 		resultByte, err := ioutil.ReadFile(taskPath + "result")
-		if err != nil {
-			resultByte = nil
-
+		resultStr := ""
+		if err == nil {
+			resultStr = base64.StdEncoding.EncodeToString(resultByte)
+		} else {
 			if !os.IsNotExist(err) {
 				Log.Printf("%s\n", err)
 				resultStatus = -2
@@ -77,7 +79,7 @@ func processCrack(task StructCrackTask) (status bool) {
 
 		fmt.Printf("Sending result of crack #%s (%s, status: %d)...\n", task.Crack_id, task.Platform, resultStatus)
 
-		if sendResult(`[{"crack_id":"`+task.Crack_id+`","start":"`+task.Start+`","offset":"`+task.Offset+`","result":"`+string(resultByte)+`","status":"`+strconv.Itoa(resultStatus)+`"}]`) == true {
+		if sendResult(`[{"crack_id":"`+task.Crack_id+`","start":"`+task.Start+`","offset":"`+task.Offset+`","result":"`+resultStr+`","status":"`+strconv.Itoa(resultStatus)+`"}]`) == true {
 			fmt.Printf("Remove current task info of crack #%s (%s)...\n", task.Crack_id, task.Platform)
 			err = os.RemoveAll(taskPath)
 			if err != nil {
