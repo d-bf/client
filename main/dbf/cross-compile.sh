@@ -9,14 +9,10 @@ export GOOS="linux"
 export GOARCH="amd64"
 echo "Compiling... (OS: $GOOS, ARCH: $GOARCH)"
 go install
-echo "Done"
-echo
 
 export GOARCH="386"
 echo "Compiling... (OS: $GOOS, ARCH: $GOARCH)"
 go install
-echo "Done"
-echo
 
 # Windows
 export GOOS="windows"
@@ -24,14 +20,10 @@ export GOOS="windows"
 export GOARCH="amd64"
 echo "Compiling... (OS: $GOOS, ARCH: $GOARCH)"
 go install
-echo "Done"
-echo
 
 export GOARCH="386"
 echo "Compiling... (OS: $GOOS, ARCH: $GOARCH)"
 go install
-echo "Done"
-echo
 
 # Darwin
 export GOOS="darwin"
@@ -39,11 +31,7 @@ export GOOS="darwin"
 export GOARCH="amd64"
 echo "Compiling... (OS: $GOOS, ARCH: $GOARCH)"
 go install
-echo "Done"
-echo
 
 export GOARCH="386"
 echo "Compiling... (OS: $GOOS, ARCH: $GOARCH)"
 go install
-echo "Done"
-echo
