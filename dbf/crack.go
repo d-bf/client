@@ -55,7 +55,7 @@ type StructCrackerGen struct {
 	Arg  []string `json:"arg"`
 }
 
-func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
+func processCrack(task *StructCrackTask) bool {
 	var jsonByte []byte
 	var vendorPath, cmdJsonStr string
 	var cmdArg []string
@@ -86,7 +86,8 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		}
 	}()
 
-	crackJson, err := ioutil.ReadFile(*crackInfoPath)
+	crackInfoPath := getPath(_PATH_CRACK) + task.Crack_id + PATH_SEPARATOR + "crack.json"
+	crackJson, err := ioutil.ReadFile(crackInfoPath)
 	if err != nil {
 		Log.Printf("%s\n", err)
 		resultStatus = -3
@@ -125,10 +126,10 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	}
 
 	// Check hashfile
-	*crackInfoPath = filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "hashfile"
-	if _, err := os.Stat(*crackInfoPath); err != nil {
+	crackInfoPath = filepath.Dir(crackInfoPath) + PATH_SEPARATOR + "hashfile"
+	if _, err := os.Stat(crackInfoPath); err != nil {
 		if os.IsNotExist(err) { // Does not exist, so create it
-			err = ioutil.WriteFile(*crackInfoPath, []byte(crack.Target), 0664)
+			err = ioutil.WriteFile(crackInfoPath, []byte(crack.Target), 0664)
 			if err != nil {
 				Log.Printf("%s\n", err) // Error in creating
 				resultStatus = -7
@@ -181,7 +182,7 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 	}
 
 	generatorReplacer := strings.NewReplacer("START", task.Start, "OFFSET", task.Offset, "LEN_MIN", crack.Len_min, "LEN_MAX", crack.Len_max, `,"CHAR1"`, char1, `,"CHAR2"`, char2, `,"CHAR3"`, char3, `,"CHAR4"`, char4, "MASK", crack.Mask, `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
-	crackerReplacer := strings.NewReplacer("ALGO_ID", crack.Algo_id, "ALGO_NAME", crack.Algo_name, `"HASH_FILE"`, strconv.Quote(*crackInfoPath), `"OUT_FILE"`, strconv.Quote(taskPath+"result"), `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
+	crackerReplacer := strings.NewReplacer("ALGO_ID", crack.Algo_id, "ALGO_NAME", crack.Algo_name, `"HASH_FILE"`, strconv.Quote(crackInfoPath), `"OUT_FILE"`, strconv.Quote(taskPath+"result"), `"IN_FILE"`, strconv.Quote(taskPath+"file.fifo"))
 
 	if internal_gen { // Embeded
 		// Get cracker info
@@ -346,9 +347,9 @@ func processCrack(task *StructCrackTask, crackInfoPath *string) bool {
 		cmdJsonStr = generatorReplacer.Replace(cmdJsonStr)
 		if strings.Contains(cmdJsonStr, "DEP_GEN") {
 			// Check if dependency exists in crack location
-			*crackInfoPath = filepath.Dir(*crackInfoPath) + PATH_SEPARATOR + "dep" + PATH_SEPARATOR + "dep-gen"
-			if _, err := os.Stat(*crackInfoPath); err == nil { // dep-gen file exists in crack location and is accessible
-				cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(*crackInfoPath), -1)
+			crackInfoPath = filepath.Dir(crackInfoPath) + PATH_SEPARATOR + "dep" + PATH_SEPARATOR + "dep-gen"
+			if _, err := os.Stat(crackInfoPath); err == nil { // dep-gen file exists in crack location and is accessible
+				cmdJsonStr = strings.Replace(cmdJsonStr, `"DEP_GEN"`, strconv.Quote(crackInfoPath), -1)
 			} else { // Check if dependency exists in generator location
 				vendorPath = filepath.Dir(vendorPath) + PATH_SEPARATOR + "dep-gen"
 				if _, err := os.Stat(vendorPath); err == nil { // dep-gen file exists in generator location and is accessible
