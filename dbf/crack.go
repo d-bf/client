@@ -69,7 +69,11 @@ func processCrack(task StructCrackTask) (status bool) {
 		resultByte, err := ioutil.ReadFile(taskPath + "result")
 		resultStr := ""
 		if err == nil {
-			resultStr = base64.StdEncoding.EncodeToString(resultByte)
+			if len(resultByte) > 0 {
+				resultStr = base64.StdEncoding.EncodeToString(resultByte)
+			} else {
+				resultStr = ""
+			}
 		} else {
 			if !os.IsNotExist(err) {
 				Log.Printf("%s\n", err)
