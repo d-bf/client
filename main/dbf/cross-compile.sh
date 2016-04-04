@@ -1,5 +1,7 @@
 #/bin/bash
 
+# export GOPATH="" 
+
 PATH_SCRIPT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 PATH_BUILD="$PATH_SCRIPT/dbf_release"
