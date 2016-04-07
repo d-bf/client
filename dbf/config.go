@@ -315,7 +315,7 @@ func checkVendor(vendorType string, vendorName *string, platformId *string, vend
 	if _, err := os.Stat(*vendorPath); err != nil {
 		if os.IsNotExist(err) { // Does not exist, so get it
 
-			fmt.Printf("Downloading %s: %s (%s)...\n", vendorType, *vendorName, *platformId)
+			fmt.Printf("Downloading %s: %s (%s)\nThis may take a few minutes, please wait...\n", vendorType, *vendorName, *platformId)
 
 			return getVendor(&vendorType, vendorName, platformId, vendorPath)
 		} else {
