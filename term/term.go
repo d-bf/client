@@ -13,6 +13,8 @@ func Clear() {
 		cmd = exec.Command("clear")
 	case "windows":
 		cmd = exec.Command("cmd", "/C", "cls")
+	default:
+		cmd = exec.Command("clear")
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Run()
